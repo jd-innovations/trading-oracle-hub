@@ -34,30 +34,30 @@ export function EsCandleChart({
       chart = lib.createChart(containerRef.current, {
         height,
         layout: {
-          background: { type: lib.ColorType.Solid, color: `oklch(${bg})` },
-          textColor: `oklch(${text})`,
+          background: { type: lib.ColorType.Solid, color: bg },
+          textColor: text,
           fontFamily:
             "JetBrains Mono, ui-monospace, Menlo, monospace",
           fontSize: 11,
         },
         grid: {
-          vertLines: { color: `oklch(${grid})` },
-          horzLines: { color: `oklch(${grid})` },
+          vertLines: { color: grid },
+          horzLines: { color: grid },
         },
-        rightPriceScale: { borderColor: `oklch(${grid})` },
-        timeScale: { borderColor: `oklch(${grid})`, timeVisible: true, secondsVisible: false },
+        rightPriceScale: { borderColor: grid },
+        timeScale: { borderColor: grid, timeVisible: true, secondsVisible: false },
         crosshair: { mode: 1 },
       });
 
       const bull = styles.getPropertyValue("--bull").trim();
       const bear = styles.getPropertyValue("--bear").trim();
       const series = chart.addSeries(lib.CandlestickSeries, {
-        upColor: `oklch(${bull})`,
-        downColor: `oklch(${bear})`,
-        borderUpColor: `oklch(${bull})`,
-        borderDownColor: `oklch(${bear})`,
-        wickUpColor: `oklch(${bull})`,
-        wickDownColor: `oklch(${bear})`,
+        upColor: bull,
+        downColor: bear,
+        borderUpColor: bull,
+        borderDownColor: bear,
+        wickUpColor: bull,
+        wickDownColor: bear,
       });
       series.setData(data as any);
 
@@ -115,20 +115,20 @@ export function EquityChart({
       chart = lib.createChart(containerRef.current, {
         height,
         layout: {
-          background: { type: lib.ColorType.Solid, color: `oklch(${bg})` },
-          textColor: `oklch(${text})`,
+          background: { type: lib.ColorType.Solid, color: bg },
+          textColor: text,
           fontFamily: "JetBrains Mono, ui-monospace, monospace",
           fontSize: 10,
         },
         grid: {
-          vertLines: { color: `oklch(${grid})` },
-          horzLines: { color: `oklch(${grid})` },
+          vertLines: { color: grid },
+          horzLines: { color: grid },
         },
-        rightPriceScale: { borderColor: `oklch(${grid})` },
-        timeScale: { borderColor: `oklch(${grid})`, timeVisible: false },
+        rightPriceScale: { borderColor: grid },
+        timeScale: { borderColor: grid, timeVisible: false },
       });
       const series = chart.addSeries(lib.AreaSeries, {
-        lineColor: `oklch(${info})`,
+        lineColor: info,
         topColor: `oklch(${info} / 0.4)`,
         bottomColor: `oklch(${info} / 0)`,
         lineWidth: 2,
