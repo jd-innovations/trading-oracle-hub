@@ -127,10 +127,11 @@ export function EquityChart({
         rightPriceScale: { borderColor: grid },
         timeScale: { borderColor: grid, timeVisible: false },
       });
+      const withAlpha = (c: string, a: number) => c.replace(/\)\s*$/, ` / ${a})`);
       const series = chart.addSeries(lib.AreaSeries, {
         lineColor: info,
-        topColor: `oklch(${info} / 0.4)`,
-        bottomColor: `oklch(${info} / 0)`,
+        topColor: withAlpha(info, 0.4),
+        bottomColor: withAlpha(info, 0),
         lineWidth: 2,
       });
       series.setData(data as any);
