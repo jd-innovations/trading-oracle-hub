@@ -9,8 +9,38 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as PerformanceRouteImport } from './routes/performance'
+import { Route as JournalRouteImport } from './routes/journal'
+import { Route as IronFlyRouteImport } from './routes/iron-fly'
+import { Route as BalanceZonesRouteImport } from './routes/balance-zones'
+import { Route as AnalysisRouteImport } from './routes/analysis'
 import { Route as IndexRouteImport } from './routes/index'
 
+const PerformanceRoute = PerformanceRouteImport.update({
+  id: '/performance',
+  path: '/performance',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const JournalRoute = JournalRouteImport.update({
+  id: '/journal',
+  path: '/journal',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IronFlyRoute = IronFlyRouteImport.update({
+  id: '/iron-fly',
+  path: '/iron-fly',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BalanceZonesRoute = BalanceZonesRouteImport.update({
+  id: '/balance-zones',
+  path: '/balance-zones',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AnalysisRoute = AnalysisRouteImport.update({
+  id: '/analysis',
+  path: '/analysis',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -19,28 +49,102 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/analysis': typeof AnalysisRoute
+  '/balance-zones': typeof BalanceZonesRoute
+  '/iron-fly': typeof IronFlyRoute
+  '/journal': typeof JournalRoute
+  '/performance': typeof PerformanceRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/analysis': typeof AnalysisRoute
+  '/balance-zones': typeof BalanceZonesRoute
+  '/iron-fly': typeof IronFlyRoute
+  '/journal': typeof JournalRoute
+  '/performance': typeof PerformanceRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/analysis': typeof AnalysisRoute
+  '/balance-zones': typeof BalanceZonesRoute
+  '/iron-fly': typeof IronFlyRoute
+  '/journal': typeof JournalRoute
+  '/performance': typeof PerformanceRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/analysis'
+    | '/balance-zones'
+    | '/iron-fly'
+    | '/journal'
+    | '/performance'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/analysis'
+    | '/balance-zones'
+    | '/iron-fly'
+    | '/journal'
+    | '/performance'
+  id:
+    | '__root__'
+    | '/'
+    | '/analysis'
+    | '/balance-zones'
+    | '/iron-fly'
+    | '/journal'
+    | '/performance'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AnalysisRoute: typeof AnalysisRoute
+  BalanceZonesRoute: typeof BalanceZonesRoute
+  IronFlyRoute: typeof IronFlyRoute
+  JournalRoute: typeof JournalRoute
+  PerformanceRoute: typeof PerformanceRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/performance': {
+      id: '/performance'
+      path: '/performance'
+      fullPath: '/performance'
+      preLoaderRoute: typeof PerformanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/journal': {
+      id: '/journal'
+      path: '/journal'
+      fullPath: '/journal'
+      preLoaderRoute: typeof JournalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/iron-fly': {
+      id: '/iron-fly'
+      path: '/iron-fly'
+      fullPath: '/iron-fly'
+      preLoaderRoute: typeof IronFlyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/balance-zones': {
+      id: '/balance-zones'
+      path: '/balance-zones'
+      fullPath: '/balance-zones'
+      preLoaderRoute: typeof BalanceZonesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/analysis': {
+      id: '/analysis'
+      path: '/analysis'
+      fullPath: '/analysis'
+      preLoaderRoute: typeof AnalysisRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -53,7 +157,22 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AnalysisRoute: AnalysisRoute,
+  BalanceZonesRoute: BalanceZonesRoute,
+  IronFlyRoute: IronFlyRoute,
+  JournalRoute: JournalRoute,
+  PerformanceRoute: PerformanceRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
