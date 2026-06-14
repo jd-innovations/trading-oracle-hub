@@ -2,9 +2,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { Copy, Check } from "lucide-react";
 import { AppShell, Panel } from "@/components/layout/AppShell";
-import { EsCandleChart } from "@/components/charts/Charts";
+import { EsChartPanel } from "@/components/charts/EsChartPanel";
 import { TpoProfile } from "@/components/charts/TpoProfile";
-import { dailyPlan, planResult, esCandles } from "@/lib/mock/data";
+import { dailyPlan, planResult } from "@/lib/mock/data";
 import { fmtPrice, planToText, resultToText } from "@/lib/format";
 
 export const Route = createFileRoute("/")({
@@ -23,20 +23,7 @@ function PlanPage() {
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
         <div className="space-y-3 lg:col-span-2">
           <DailyPlanCard />
-          <Panel title="ES · 2-min · Daily Plan Levels">
-            <EsCandleChart
-              data={esCandles}
-              lines={[
-                { price: dailyPlan.t3Up, color: "rgba(34,197,94,0.9)", label: "T3↑" },
-                { price: dailyPlan.t2Up, color: "rgba(34,197,94,0.7)", label: "T2↑" },
-                { price: dailyPlan.t1Up, color: "rgba(34,197,94,0.5)", label: "T1↑" },
-                { price: dailyPlan.pivot, color: "rgba(234,179,8,0.95)", label: "Pivot", style: "dashed" },
-                { price: dailyPlan.t1Dn, color: "rgba(239,68,68,0.5)", label: "T1↓" },
-                { price: dailyPlan.t2Dn, color: "rgba(239,68,68,0.7)", label: "T2↓" },
-                { price: dailyPlan.t3Dn, color: "rgba(239,68,68,0.9)", label: "T3↓" },
-              ]}
-            />
-          </Panel>
+          <EsChartPanel />
         </div>
         <div className="space-y-3">
           <LevelRail />
