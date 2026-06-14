@@ -1,118 +1,59 @@
+# Chart Enhancements
 
-# JD Trading Planner — Shell UI Plan
+## Where the chart lives today
 
-Build a frontend-only shell (no backend, no DB, no API calls) for a professional ES futures + SPX options trading planner. All sections populated with realistic dummy ES data.
+The ES candle chart is on the **Plan tab** (route `/`, the home page).
+- File: `src/routes/index.tsx` → renders `<EsCandleChart>` inside the "ES · 2-min · Daily Plan Levels" panel.
+- Component: `src/components/charts/Charts.tsx` (`EsCandleChart`) — built on `lightweight-charts`.
+- Mock bars: `src/lib/mock/data.ts` → `esCandles` (~200 × 2-min bars).
+- The same component is reused on the Iron Fly tab for SPX.
 
-## Scope
+Open the preview at `/` and scroll the left column — the chart sits below the Daily Plan card with horizontal lines for T1/T2/T3 ↑/↓ and Pivot.
 
-- Frontend only. Static dummy data in `src/lib/mock/`.
-- Dark mode default with light toggle (class-based, persisted to localStorage).
-- Mobile-first; responsive up to desktop.
-- Charting via `lightweight-charts` (TradingView OSS).
+## What we'll add
 
-## Visual direction
+Three controls sit in a new toolbar above the chart canvas.
 
-Trading-terminal aesthetic: near-black background, high-density typography, monospace for numbers, restrained accent colors.
-
-- Background: deep neutral (#0A0B0D dark / #FAFAFA light)
-- Surfaces: layered panels with hairline borders
-- Accents: bull green, bear red, amber for pivot/warnings, blue for neutral/info
-- Type: `JetBrains Mono` for prices/levels, `Inter` for prose, `Space Grotesk` for headings
-- Dense, compact spacing; small caps for section labels; tabular-nums everywhere
-
-Tokens defined in `src/styles.css` via `@theme` (oklch). No hardcoded colors in components.
-
-## Routing (TanStack Start)
-
-Bottom tab bar on mobile, left sidebar on desktop. Six routes:
-
-```
-src/routes/
-  __root.tsx              shell: header + nav, theme provider, Outlet
-  index.tsx               redirect → /plan (or render Plan directly)
-  plan.tsx                Tab 1
-  analysis.tsx            Tab 2
-  iron-fly.tsx            Tab 3
-  journal.tsx             Tab 4
-  performance.tsx         Tab 5
-  balance-zones.tsx       Tab 6
+```text
+┌─ ES · 2-min · Daily Plan Levels ──────────────────────────┐
+│  [2m] [5m] [15m] [RTH]    GEX ☐    ⛶ Fullscreen           │
+├────────────────────────────────────────────────────────────┤
+│                                                            │
+│              candles + level lines                         │
+│                                                            │
+└────────────────────────────────────────────────────────────┘
 ```
 
-Each route sets its own `head()` metadata.
+### 1. Timeframe switch (2m / 5m / 15m / RTH)
+- Segmented control rendered above the chart.
+- Frontend-only aggregation: a `resampleCandles(bars, minutes)` util buckets the 2-min `esCandles` into the chosen interval (open = first, close = last, high = max, low = min). "RTH" returns the 09:30–16:00 ET subset of 2-min bars.
+- Selected timeframe is local component state; switching re-feeds the chart series via the existing `data` prop and `chart.timeScale().fitContent()`.
 
-## Components
+### 2. GEX visualization
+- Toggle checkbox "GEX" in the toolbar.
+- When on, the chart overlays horizontal `priceLine`s from `gexLevels` (already in mock data: Call Wall, Gamma Flip, Put Wall, HVL) on top of the existing T1/T2/T3/Pivot lines.
+  - Call Wall → green dashed, thicker
+  - Put Wall → red dashed, thicker
+  - Gamma Flip → amber dashed
+  - HVL → muted dashed
+  - Line width scaled by `weight`.
+- A small legend chip row appears under the toolbar listing the active GEX levels with their price, so users can read them without hovering.
 
-```
-src/components/
-  layout/
-    AppShell.tsx           header + nav wrapper
-    BottomTabs.tsx         mobile bottom nav (6 icons)
-    SideNav.tsx            desktop left nav
-    ThemeToggle.tsx
-    SessionClock.tsx       ET time + RTH status pill
-  plan/
-    DailyPlanCard.tsx      exact Discord-format block
-    PlanResultsCard.tsx    exact Discord-format results block
-    LevelRail.tsx          visual T3↑..T3↓ ladder
-  charts/
-    EsCandleChart.tsx      lightweight-charts 2-min candles + level lines
-    TpoProfile.tsx         canvas-rendered TPO letters w/ POC/VAH/VAL shading
-    SpxChart.tsx           lightweight-charts for Iron Fly
-  analysis/
-    NakedLevelsList.tsx
-    StructuralFlags.tsx    poor high/low, spikes, tails, single prints
-    BalanceZonePanel.tsx
-  ironfly/
-    TradeRecCard.tsx       strikes, credit, BE, max risk
-    GexLevelsTable.tsx
-    UpdateFeed.tsx         30-min timeline of posts
-  journal/
-    JournalTable.tsx       filter by date + instrument (ES / SPX)
-  performance/
-    StatTiles.tsx          bias acc, T1/T2/T3 hit %, ext hit %
-    WindowSelector.tsx     L5 / L10 / L20 / All
-    EquityCurve.tsx        lightweight-charts area
-  balance/
-    OtfBadges.tsx          daily + weekly OTF up/down/none
-    ZoneTable.tsx          high / halfback / low / breakout status
-  ui/                      shadcn (already present)
-```
+### 3. Fullscreen mode
+- ⛶ button in the toolbar.
+- Uses the browser Fullscreen API on the chart's wrapper div (`element.requestFullscreen()` / `document.exitFullscreen()`), with a fallback CSS class (`fixed inset-0 z-50 bg-background`) for browsers/contexts where Fullscreen API is blocked (e.g. embedded preview iframes — important since the user views inside Lovable's preview).
+- Exit via the same button, `Esc` key, or `fullscreenchange` event.
+- The chart's existing `ResizeObserver` already handles the canvas resize, so no chart-internal changes needed beyond letting the wrapper grow.
 
-## Dummy data
+## Files to change / add
 
-`src/lib/mock/` modules export typed fixtures:
+- **New** `src/components/charts/ChartToolbar.tsx` — segmented timeframe control, GEX toggle, fullscreen button. Pure presentational; emits callbacks.
+- **New** `src/lib/chart-utils.ts` — `resampleCandles(bars, minutes)` and `filterRTH(bars)` helpers.
+- **Edit** `src/components/charts/Charts.tsx` — wrap `EsCandleChart` in a container div ref'd for fullscreen; accept new optional props `showGex?: boolean` and let parent pass merged `lines`. Keep the existing API backward-compatible so the Iron Fly SPX chart is unaffected.
+- **New** `src/components/charts/EsChartPanel.tsx` — stateful wrapper that owns timeframe + GEX + fullscreen state, composes `ChartToolbar` + `EsCandleChart`, and computes the lines/data passed down.
+- **Edit** `src/routes/index.tsx` — replace the inline `<EsCandleChart .../>` block with `<EsChartPanel />`.
 
-- `dailyPlan.ts` — today's plan (T1/T2/T3 up, pivot, T1/T2/T3 down, bias, context, events)
-- `planResults.ts` — yesterday's scored result
-- `esCandles.ts` — ~200 bars of 2-min ES OHLC around the levels
-- `tpo.ts` — 30-min TPO letter rows, POC/VAH/VAL
-- `nakedLevels.ts`, `structuralFlags.ts`, `balanceZones.ts`
-- `ironFly.ts` — current rec + 30-min updates
-- `spxCandles.ts`, `gexLevels.ts`
-- `journal.ts` — ~40 entries mixed ES/SPX
-- `performance.ts` — stats per rolling window + equity points
-
-## Tab contents
-
-1. **Plan** — `DailyPlanCard` (exact format, copy-to-clipboard button), `LevelRail`, `EsCandleChart` with level lines, `TpoProfile`, `PlanResultsCard` for previous session.
-2. **Analysis** — `TpoProfile` (larger), `NakedLevelsList`, `StructuralFlags`, `BalanceZonePanel`.
-3. **Iron Fly** — `TradeRecCard`, `GexLevelsTable`, `SpxChart`, `UpdateFeed`.
-4. **Journal** — `JournalTable` with date range + instrument filter, P&L column, expandable rows.
-5. **Performance** — `WindowSelector`, `StatTiles`, `EquityCurve`, hit-rate breakdown table.
-6. **Balance Zones** — `OtfBadges` (daily/weekly), `ZoneTable`, mini chart with zone overlay.
-
-## Technical notes
-
-- Install: `lightweight-charts`, `date-fns`. Icons via existing `lucide-react`.
-- Theme: add `.dark` class on `<html>`; toggle persisted in `localStorage`; default dark on first load.
-- Number formatting: helper `formatPrice(n)` → 2 decimals, tabular-nums. Time helper for ET.
-- Daily Plan + Results text blocks rendered from a single template function so the format is locked and reusable (clipboard copy returns identical string).
-- All charts lazy-import `lightweight-charts` inside `useEffect` to avoid SSR `window` issues.
-- No server functions, no Cloud, no auth.
-
-## Out of scope (explicit)
-
-- No Discord integration, no scheduling, no scoring logic, no GEX calculation, no persistence.
-- Results/scoring shown are static dummy values.
-
-Ready to build on approval.
+## Out of scope
+- No real GEX math — uses existing static `gexLevels` mock.
+- No tick-data backend; resampling runs over the existing 2-min mock array.
+- Iron Fly SPX chart keeps its current simple form (we can promote it to the same panel later if you want).
