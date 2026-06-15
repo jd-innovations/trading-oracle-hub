@@ -43,8 +43,7 @@ class LevelRenderer implements IPrimitivePaneRenderer {
         const clippedLeft = Math.max(0, left);
         const clippedRight = Math.min(mediaSize.width, right);
 
-        const dim = lvl.broken;
-        const alpha = dim ? 0.45 : 0.95;
+        const alpha = 0.95;
 
         // Line
         c.save();
