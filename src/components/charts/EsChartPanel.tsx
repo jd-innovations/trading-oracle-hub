@@ -48,6 +48,8 @@ export function EsChartPanel() {
   const chartRef = useRef<ChartHandle>(null);
 
   const { candles: spxLive, isLive: spxIsLive } = useSpxFeed(timeframe);
+  const { levels: spxGexLive, asOf: spxGexAsOf, isLive: spxGexIsLive } =
+    useSpxGex(symbol === "SPX" && showGex);
 
   // For SPX prefer the live Tradier feed; fall back silently to mock if
   // the feed is empty (no token / API down / not entitled).
@@ -66,9 +68,14 @@ export function EsChartPanel() {
     return resampleCandles(source, TF_MIN[timeframe]);
   }, [timeframe, source, useRawSource]);
 
+  const activeGex = useMemo(
+    () => (symbol === "SPX" && spxGexLive.length > 0 ? spxGexLive : gexLevels),
+    [symbol, spxGexLive],
+  );
+
   const lines = useMemo(
-    () => (showGex ? [...planLines, ...gexLines] : planLines),
-    [showGex],
+    () => (showGex ? [...planLines, ...makeGexLines(activeGex)] : planLines),
+    [showGex, activeGex],
   );
 
   const { configs: orConfigs, setConfigs: setOrConfigs, reset: resetOr } = useOpeningRanges();
