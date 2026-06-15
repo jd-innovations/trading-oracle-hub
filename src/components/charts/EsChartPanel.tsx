@@ -172,8 +172,17 @@ export function EsChartPanel() {
         onFit={handleFit}
       />
       {showGex && (
-        <div className="flex flex-wrap gap-1.5 border-b border-border bg-surface-2/40 px-3 py-1.5">
-          {gexLevels.map((g) => (
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-border bg-surface-2/40 px-3 py-1.5">
+          {symbol === "SPX" && spxGexIsLive && (
+            <span
+              className="mono inline-flex items-center gap-1 rounded border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-500"
+              title={`Tradier GEX · ${new Date(spxGexAsOf * 1000).toLocaleTimeString()}`}
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              GEX LIVE
+            </span>
+          )}
+          {activeGex.map((g) => (
             <span
               key={g.label}
               className="mono inline-flex items-center gap-1 rounded border border-border bg-surface-1 px-1.5 py-0.5 text-[10px]"
