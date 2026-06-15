@@ -81,7 +81,20 @@ export const EsCandleChart = forwardRef<ChartHandle, {
           horzLines: { color: grid },
         },
         rightPriceScale: { borderColor: grid },
-        timeScale: { borderColor: grid, timeVisible: true, secondsVisible: false },
+        timeScale: {
+          borderColor: grid,
+          timeVisible: true,
+          secondsVisible: false,
+          rightOffset: 4,
+          barSpacing: 8,
+          minBarSpacing: 6,
+          tickMarkFormatter: (time: number) => {
+            const d = new Date(time * 1000);
+            const h = (d.getUTCHours() - 4 + 24) % 24;
+            const m = d.getUTCMinutes();
+            return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+          },
+        },
         crosshair: { mode: 1 },
       });
       chartRef.current = chart;
