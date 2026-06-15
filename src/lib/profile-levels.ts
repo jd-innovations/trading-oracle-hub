@@ -361,6 +361,8 @@ export function computeProfileLevels(
           p.price,
           lastBarTime,
         );
+        // Only keep naked 30m POCs — drop any that have been touched.
+        if (broken) continue;
         levels.push({
           kind: "poc30m",
           price: p.price,
