@@ -92,7 +92,7 @@ class LevelRenderer implements IPrimitivePaneRenderer {
           attempts++;
         }
 
-        c.fillStyle = withAlpha(lvl.color, dim ? 0.18 : 0.85);
+        c.fillStyle = withAlpha(lvl.color, 0.85);
         c.fillRect(labelX, labelY, w, h);
         c.fillStyle = "rgba(10,10,10,0.95)";
         c.textBaseline = "middle";
