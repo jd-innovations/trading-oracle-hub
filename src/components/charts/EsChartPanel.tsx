@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EsCandleChart, type ChartHandle, type PriceLine } from "./Charts";
 import { ChartToolbar, type Symbol, type Timeframe } from "./ChartToolbar";
+import { OpeningRangesPopover } from "./OpeningRangesPopover";
 import { dailyPlan, esCandles, spxCandles, gexLevels } from "@/lib/mock/data";
 import { resampleCandles, filterRTH } from "@/lib/chart-utils";
 import { fmtPrice } from "@/lib/format";
+import { useOpeningRanges } from "@/lib/use-opening-ranges";
+import { computeZones } from "@/lib/opening-ranges";
 
 const TF_MIN: Record<Timeframe, number> = { "2m": 2, "5m": 5, "15m": 15, RTH: 2 };
 
@@ -49,6 +52,12 @@ export function EsChartPanel() {
   const lines = useMemo(
     () => (showGex ? [...planLines, ...gexLines] : planLines),
     [showGex],
+  );
+
+  const { configs: orConfigs, setConfigs: setOrConfigs, reset: resetOr } = useOpeningRanges();
+  const zones = useMemo(
+    () => computeZones(source, orConfigs, symbol),
+    [source, orConfigs, symbol],
   );
 
   const handleFit = () => chartRef.current?.fitContent();
@@ -104,6 +113,12 @@ export function EsChartPanel() {
     >
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <h3 className="label-xs">{symbol} · {timeframe} · Daily Plan Levels</h3>
+        <OpeningRangesPopover
+          configs={orConfigs}
+          onChange={setOrConfigs}
+          onReset={resetOr}
+          symbol={symbol}
+        />
       </div>
       <ChartToolbar
         timeframe={timeframe}
@@ -134,7 +149,7 @@ export function EsChartPanel() {
         </div>
       )}
       <div className="flex-1 p-2">
-        <EsCandleChart ref={chartRef} data={data} lines={lines} height={chartHeight} />
+        <EsCandleChart ref={chartRef} data={data} lines={lines} zones={zones} height={chartHeight} />
       </div>
     </div>
   );

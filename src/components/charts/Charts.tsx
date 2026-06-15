@@ -4,6 +4,8 @@ export interface ChartHandle {
   fitContent: () => void;
 }
 import { toRgb, withAlpha } from "@/lib/color";
+import { OpeningRangePrimitive } from "./OpeningRangePrimitive";
+import type { OpeningRangeZone } from "@/lib/opening-ranges";
 
 export interface PriceLine {
   price: number;
@@ -26,10 +28,13 @@ function useThemeKey() {
 export const EsCandleChart = forwardRef<ChartHandle, {
   data: Array<{ time: number; open: number; high: number; low: number; close: number }>;
   lines?: PriceLine[];
+  zones?: OpeningRangeZone[];
   height?: number;
-}>(function EsCandleChart({ data, lines = [], height = 320 }, ref) {
+}>(function EsCandleChart({ data, lines = [], zones = [], height = 320 }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<any>(null);
+  const primitiveRef = useRef<OpeningRangePrimitive | null>(null);
+  const zonesRef = useRef<OpeningRangeZone[]>(zones);
   const themeKey = useThemeKey();
 
   useImperativeHandle(ref, () => ({
@@ -94,6 +99,11 @@ export const EsCandleChart = forwardRef<ChartHandle, {
         });
       }
 
+      const primitive = new OpeningRangePrimitive();
+      series.attachPrimitive(primitive);
+      primitive.setZones(zonesRef.current);
+      primitiveRef.current = primitive;
+
       chart.timeScale().fitContent();
 
       resizeObserver = new ResizeObserver((entries) => {
@@ -105,10 +115,17 @@ export const EsCandleChart = forwardRef<ChartHandle, {
     return () => {
       disposed = true;
       resizeObserver?.disconnect();
+      primitiveRef.current = null;
       chartRef.current = null;
       chart?.remove();
     };
   }, [data, lines, height, themeKey]);
+
+  // Push zones into the primitive without recreating the chart.
+  useEffect(() => {
+    zonesRef.current = zones;
+    primitiveRef.current?.setZones(zones);
+  }, [zones]);
 
   return <div ref={containerRef} className="w-full" style={{ height }} />;
 });
