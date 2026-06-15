@@ -9,6 +9,7 @@ import { useOpeningRanges } from "@/lib/use-opening-ranges";
 import { computeZones } from "@/lib/opening-ranges";
 import { computeProfileLevels } from "@/lib/profile-levels";
 import { useSpxFeed } from "@/lib/use-spx-feed";
+import { useSpxGex } from "@/lib/use-spx-gex";
 
 const TF_MIN: Record<Timeframe, number> = { "2m": 2, "5m": 5, "15m": 15, "30m": 30, RTH: 2 };
 
@@ -29,12 +30,14 @@ function gexColor(label: string): string {
   return "rgba(148,163,184,0.85)";
 }
 
-const gexLines: PriceLine[] = gexLevels.map((g) => ({
-  price: g.price,
-  color: gexColor(g.label),
-  label: `GEX · ${g.label}`,
-  style: "dashed",
-}));
+function makeGexLines(levels: { label: string; price: number }[]): PriceLine[] {
+  return levels.map((g) => ({
+    price: g.price,
+    color: gexColor(g.label),
+    label: `GEX · ${g.label}`,
+    style: "dashed",
+  }));
+}
 
 export function EsChartPanel() {
   const [timeframe, setTimeframe] = useState<Timeframe>("2m");
@@ -45,6 +48,8 @@ export function EsChartPanel() {
   const chartRef = useRef<ChartHandle>(null);
 
   const { candles: spxLive, isLive: spxIsLive } = useSpxFeed(timeframe);
+  const { levels: spxGexLive, asOf: spxGexAsOf, isLive: spxGexIsLive } =
+    useSpxGex(symbol === "SPX" && showGex);
 
   // For SPX prefer the live Tradier feed; fall back silently to mock if
   // the feed is empty (no token / API down / not entitled).
@@ -63,9 +68,14 @@ export function EsChartPanel() {
     return resampleCandles(source, TF_MIN[timeframe]);
   }, [timeframe, source, useRawSource]);
 
+  const activeGex = useMemo(
+    () => (symbol === "SPX" && spxGexLive.length > 0 ? spxGexLive : gexLevels),
+    [symbol, spxGexLive],
+  );
+
   const lines = useMemo(
-    () => (showGex ? [...planLines, ...gexLines] : planLines),
-    [showGex],
+    () => (showGex ? [...planLines, ...makeGexLines(activeGex)] : planLines),
+    [showGex, activeGex],
   );
 
   const { configs: orConfigs, setConfigs: setOrConfigs, reset: resetOr } = useOpeningRanges();
@@ -162,8 +172,17 @@ export function EsChartPanel() {
         onFit={handleFit}
       />
       {showGex && (
-        <div className="flex flex-wrap gap-1.5 border-b border-border bg-surface-2/40 px-3 py-1.5">
-          {gexLevels.map((g) => (
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-border bg-surface-2/40 px-3 py-1.5">
+          {symbol === "SPX" && spxGexIsLive && (
+            <span
+              className="mono inline-flex items-center gap-1 rounded border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-500"
+              title={`Tradier GEX · ${new Date(spxGexAsOf * 1000).toLocaleTimeString()}`}
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              GEX LIVE
+            </span>
+          )}
+          {activeGex.map((g) => (
             <span
               key={g.label}
               className="mono inline-flex items-center gap-1 rounded border border-border bg-surface-1 px-1.5 py-0.5 text-[10px]"
