@@ -5,7 +5,7 @@ import type { Candle } from "./chart-utils";
 // SPX symbol on Tradier: try the index symbol; if your account isn't
 // entitled to index data the call will return empty and the client falls
 // back to the mock generator silently.
-const SPX_SYMBOL = "VIX" === "VIX" ? "SPX" : "SPX"; // placeholder kept for clarity
+const SPX_SYMBOL = "SPX";
 const SPX_STREAM_SYMBOL = "$SPX.X";
 
 export const getSpxHistory = createServerFn({ method: "POST" })
