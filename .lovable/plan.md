@@ -1,57 +1,60 @@
-## Wire SPX to Tradier (live brokerage, WebSocket streaming)
+## 1. SPX GEX from Tradier options chain
 
-Replace the SPX mock feed with real Tradier data. ES stays on the generator. If the Tradier token is missing or the API fails, the chart silently falls back to the existing mock — no UI error.
+Add a server-computed gamma-exposure model that reads the live SPX option chain from Tradier (live brokerage token already wired) and returns the key levels the chart can plot.
 
-### Credentials
+**New server module — `src/lib/gex.server.ts`**
+- `fetchSpxChain(token, expiration)` → `GET /v1/markets/options/chains?symbol=SPX&expiration=YYYY-MM-DD&greeks=true` (Tradier returns gamma directly when `greeks=true`).
+- `fetchSpxExpirations(token)` → `GET /v1/markets/options/expirations?symbol=SPX` to pick the nearest N expirations.
+- `fetchSpxSpot(token)` → `GET /v1/markets/quotes?symbols=SPX` for current price (needed for dollar-gamma weighting and flip search).
+- `computeGex(chain, spot)` — for each strike: `dealerGamma = (callOI * callGamma) - (putOI * putGamma)`, scaled by `spot² * 100 * 0.01` to get $/1% move (standard SpotGamma-style formula). Aggregates by strike across selected expirations.
+- Derived levels returned:
+  - **Call Wall** — strike with the largest positive call-gamma exposure above spot.
+  - **Put Wall** — strike with the largest absolute negative put-gamma exposure below spot.
+  - **Gamma Flip** — strike where cumulative dealer gamma crosses zero (linear interp between adjacent strikes).
+  - **Largest +GEX / −GEX** — top absolute strikes overall (optional secondary lines).
 
-Tradier is not a Lovable standard connector, so we'll store the brokerage token as a secret:
-- `TRADIER_ACCESS_TOKEN` — live brokerage API token (server-only)
-- Base URL hard-coded to `https://api.tradier.com` (live)
+**New server fn — `src/lib/gex.functions.ts`**
+- `getSpxGex({ expirations: number })` → returns `{ levels: GexLevel[], asOf, spot, error? }`. Uses nearest 1–3 expirations (default 1 = 0DTE/next). Silent fallback to `[]` if no token / not entitled / API error — chart keeps showing the existing mock `gexLevels` in that case.
 
-I'll request the secret via `add_secret` after you approve this plan. You'll get the token at Tradier dashboard → API Access → Production Token.
+**Client wiring — `src/lib/use-spx-gex.ts`**
+- `useSpxGex(enabled)` — react-query-style polling every 60s via `useServerFn`. Returns `{ levels, asOf, isLive }`.
 
-### Symbol
+**Chart wiring — `EsChartPanel.tsx`**
+- When `symbol === "SPX"` and `showGex` is on, swap `gexLevels` (mock) for the live levels. ES keeps mock. Header pill: small "GEX LIVE · 10:42:13" timestamp when live data is present.
+- Color/label mapping stays the same (`Call Wall`, `Put Wall`, `Gamma Flip`, etc.) so `gexColor()` already handles them.
 
-Tradier exposes SPX as `VIX`-style index symbol `$SPX.X` (commonly accepted as `SPX` on quote endpoints; we'll resolve at runtime — `markets/timesales` accepts `SPX`, streaming requires `$SPX.X`).
+**Out of scope**: per-strike GEX histogram panel, dealer-positioning model toggles, multi-expiration UI selector (hard-coded to nearest 1 expiration for v1; easy to add a dropdown later).
 
-### Server side (TanStack `createServerFn` + server route)
+**Risks**: Tradier index-option greeks require options entitlement on the brokerage account. If `greeks` come back null, we fall through to the mock silently (same pattern as the price feed).
 
-**`src/lib/tradier.server.ts`** (server-only)
-- `fetchSpxHistory({ minutes })` → calls `GET /v1/markets/timesales?symbol=SPX&interval=1min&session_filter=open&start=…&end=…`, returns OHLC bars. Tradier's smallest intraday interval is `1min`, so for the 2m chart we fetch 1m and resample server-side into 2m candles (`resampleBars(bars, 2)`). 5m/15m/30m use the same resampler. RTH only (`session_filter=open`) matches the existing RTH filter.
-- `createTradierStreamSession()` → `POST /v1/markets/events/session` returns `{ stream: { sessionid, url } }`. Required before opening the WebSocket. Sessions expire after ~5 min of inactivity; refresh on demand.
+## 2. Time label under every visible candle
 
-**`src/lib/spx-feed.functions.ts`**
-- `getSpxHistory = createServerFn({ method: "GET" }).inputValidator(z.object({ timeframe: z.enum(["1m","2m","5m","15m","30m"]), lookbackDays: z.number().int().min(1).max(60) })).handler(...)` — reads `TRADIER_ACCESS_TOKEN` inside the handler, calls `fetchSpxHistory`, resamples, returns `{ candles: Candle[] }`. On any error → returns `{ candles: [], error: "unavailable" }` so the client can fall back silently.
-- `getSpxStreamSession = createServerFn({ method: "POST" }).handler(...)` — returns `{ sessionId, wsUrl }` for the browser to open the WebSocket directly. (The browser opens the WS itself; we don't proxy ticks through the server.)
+**`src/components/charts/Charts.tsx`** — adjust the `lightweight-charts` time-scale config on `EsCandleChart`:
 
-### Client side
+```ts
+timeScale: {
+  borderColor: grid,
+  timeVisible: true,
+  secondsVisible: false,
+  rightOffset: 4,
+  barSpacing: 8,           // wider default so labels fit
+  minBarSpacing: 6,        // prevent the lib from thinning labels on zoom-out
+  tickMarkFormatter: (time) => {
+    const d = new Date(time * 1000);
+    const h = (d.getUTCHours() - 4 + 24) % 24;   // ET, matches filterRTH
+    const m = d.getUTCMinutes();
+    return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
+  },
+}
+```
 
-**`src/lib/use-spx-feed.ts`** (new hook)
-1. On mount (and on `timeframe` change), call `getSpxHistory({ data: { timeframe, lookbackDays: 5 } })`.
-   - If `candles.length > 0` → use them. Otherwise fall through to mock.
-2. Call `getSpxStreamSession()` once; open `new WebSocket(wsUrl)`.
-3. On open, send `{ symbols: ["$SPX.X"], sessionid, linebreak: true, filter: ["trade","quote"] }`.
-4. Aggregate incoming `trade` messages into the in-memory tail bar matching the chart's `timeframe`. Update the last candle live; push a new candle when the bar boundary rolls.
-5. Auto-reconnect with backoff on close/error. Refresh session via `getSpxStreamSession()` if WS rejects.
-6. Returns `{ candles, isLive }`.
+`lightweight-charts` still auto-skips overlapping labels at extreme zoom-outs (unavoidable — the library guarantees no overlap), but with `minBarSpacing: 6` every bar gets its own slot at normal/zoomed-in views, so you see HH:MM under each printed candle. Crosshair tooltip already shows the exact bar time on hover.
 
-**`src/components/charts/EsChartPanel.tsx`**
-- When `symbol === "SPX"`, swap the existing `spxCandles` mock source for `useSpxFeed({ timeframe }).candles`. If the hook returns `[]`, keep the existing mock generator output (silent fallback per your choice).
-- Tiny `isLive` indicator next to the symbol label (small green dot) — purely informational, no error toasts.
+## Files
 
-### Resampling
-
-`resampleBars(bars1m, factor)` groups N consecutive 1-minute bars into one: `open = first.open`, `close = last.close`, `high = max(highs)`, `low = min(lows)`. Bucket boundary is `Math.floor(time / (factor*60))`. Used both for the initial REST history and for the live WS tick aggregator.
-
-### Out of scope
-
-- ES (futures) — Tradier brokerage doesn't carry CME futures; stays on mock.
-- Options chains, quotes panel, order entry — feed only.
-- Tick-by-tick replay/persistence — purely live.
-- No UI to swap providers later; the seam is `use-spx-feed.ts` if we add one.
-
-### Risks / things to watch
-
-- Tradier session sessions expire on idle — the hook handles refresh.
-- Index streaming (`$SPX.X`) requires your brokerage account to be entitled to index data; if `trade` events never arrive we'll only see initial history (still better than mock). I'll log this server-side so you can spot it.
-- Tradier rate limits: 60 req/min on `markets/*`. We only call history once per timeframe switch + one session create — well within limits.
+- new: `src/lib/gex.server.ts`
+- new: `src/lib/gex.functions.ts`
+- new: `src/lib/use-spx-gex.ts`
+- edit: `src/lib/tradier.server.ts` (export a shared `tradierGet` helper to reuse auth/base URL)
+- edit: `src/components/charts/EsChartPanel.tsx` (wire `useSpxGex`, swap source for SPX, header timestamp)
+- edit: `src/components/charts/Charts.tsx` (time-scale `tickMarkFormatter` + spacing)
