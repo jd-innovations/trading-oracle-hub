@@ -30,12 +30,14 @@ function gexColor(label: string): string {
   return "rgba(148,163,184,0.85)";
 }
 
-const gexLines: PriceLine[] = gexLevels.map((g) => ({
-  price: g.price,
-  color: gexColor(g.label),
-  label: `GEX · ${g.label}`,
-  style: "dashed",
-}));
+function makeGexLines(levels: { label: string; price: number }[]): PriceLine[] {
+  return levels.map((g) => ({
+    price: g.price,
+    color: gexColor(g.label),
+    label: `GEX · ${g.label}`,
+    style: "dashed",
+  }));
+}
 
 export function EsChartPanel() {
   const [timeframe, setTimeframe] = useState<Timeframe>("2m");
