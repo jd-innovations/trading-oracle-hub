@@ -155,7 +155,14 @@ export function EsChartPanel() {
         </div>
       )}
       <div className="flex-1 p-2">
-        <EsCandleChart ref={chartRef} data={data} lines={lines} zones={zones} height={chartHeight} />
+        <EsCandleChart
+          ref={chartRef}
+          data={data}
+          lines={lines}
+          zones={zones}
+          profileLevels={profileLevels}
+          height={chartHeight}
+        />
       </div>
     </div>
   );
