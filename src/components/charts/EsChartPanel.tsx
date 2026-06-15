@@ -113,6 +113,12 @@ export function EsChartPanel() {
     >
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <h3 className="label-xs">{symbol} · {timeframe} · Daily Plan Levels</h3>
+        <OpeningRangesPopover
+          configs={orConfigs}
+          onChange={setOrConfigs}
+          onReset={resetOr}
+          symbol={symbol}
+        />
       </div>
       <ChartToolbar
         timeframe={timeframe}
