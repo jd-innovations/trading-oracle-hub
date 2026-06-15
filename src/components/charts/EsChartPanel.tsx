@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { EsCandleChart, type PriceLine } from "./Charts";
-import { ChartToolbar, type Timeframe } from "./ChartToolbar";
-import { dailyPlan, esCandles, gexLevels } from "@/lib/mock/data";
+import { EsCandleChart, type ChartHandle, type PriceLine } from "./Charts";
+import { ChartToolbar, type Symbol, type Timeframe } from "./ChartToolbar";
+import { dailyPlan, esCandles, spxCandles, gexLevels } from "@/lib/mock/data";
 import { resampleCandles, filterRTH } from "@/lib/chart-utils";
 import { fmtPrice } from "@/lib/format";
 
@@ -33,19 +33,25 @@ const gexLines: PriceLine[] = gexLevels.map((g) => ({
 
 export function EsChartPanel() {
   const [timeframe, setTimeframe] = useState<Timeframe>("2m");
+  const [symbol, setSymbol] = useState<Symbol>("ES");
   const [showGex, setShowGex] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<ChartHandle>(null);
+
+  const source = symbol === "ES" ? esCandles : spxCandles;
 
   const data = useMemo(() => {
-    if (timeframe === "RTH") return filterRTH(esCandles);
-    return resampleCandles(esCandles, TF_MIN[timeframe]);
-  }, [timeframe]);
+    if (timeframe === "RTH") return filterRTH(source);
+    return resampleCandles(source, TF_MIN[timeframe]);
+  }, [timeframe, source]);
 
   const lines = useMemo(
     () => (showGex ? [...planLines, ...gexLines] : planLines),
     [showGex],
   );
+
+  const handleFit = () => chartRef.current?.fitContent();
 
   const toggleFullscreen = async () => {
     const el = wrapperRef.current;
@@ -97,15 +103,18 @@ export function EsChartPanel() {
       }
     >
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
-        <h3 className="label-xs">ES · {timeframe} · Daily Plan Levels</h3>
+        <h3 className="label-xs">{symbol} · {timeframe} · Daily Plan Levels</h3>
       </div>
       <ChartToolbar
         timeframe={timeframe}
         onTimeframe={setTimeframe}
+        symbol={symbol}
+        onSymbol={setSymbol}
         showGex={showGex}
         onToggleGex={() => setShowGex((v) => !v)}
         isFullscreen={isFullscreen}
         onToggleFullscreen={toggleFullscreen}
+        onFit={handleFit}
       />
       {showGex && (
         <div className="flex flex-wrap gap-1.5 border-b border-border bg-surface-2/40 px-3 py-1.5">
@@ -125,7 +134,7 @@ export function EsChartPanel() {
         </div>
       )}
       <div className="flex-1 p-2">
-        <EsCandleChart data={data} lines={lines} height={chartHeight} />
+        <EsCandleChart ref={chartRef} data={data} lines={lines} height={chartHeight} />
       </div>
     </div>
   );
