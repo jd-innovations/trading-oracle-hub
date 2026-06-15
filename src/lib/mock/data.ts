@@ -84,8 +84,8 @@ function genCandles(seed: number, start: number, count = 200) {
   };
   const bars: Array<{ time: number; open: number; high: number; low: number; close: number }> = [];
   let price = start;
-  // Start at today 09:30 ET — use UTC seconds; values are illustrative.
-  let t = Math.floor(Date.now() / 1000) - 200 * 120;
+  // Fixed illustrative start time so SSR and client render the same data.
+  let t = Date.UTC(2026, 5, 13, 13, 30) / 1000;
   for (let i = 0; i < count; i++) {
     const drift = (rand() - 0.48) * 1.8;
     const open = price;
@@ -125,13 +125,18 @@ export const tpoRows: TpoRow[] = (() => {
   const top = 6098;
   const bottom = 6062;
   const step = 0.25;
+  let s = 1337;
+  const rand = () => {
+    s = (s * 9301 + 49297) % 233280;
+    return s / 233280;
+  };
   for (let p = top; p >= bottom; p -= step) {
     let l = "";
     for (let i = 0; i < letters.length; i++) {
       // bell-ish around 6080
       const dist = Math.abs(p - 6080.5);
       const prob = Math.max(0, 1 - dist / 12 - i * 0.03);
-      if (Math.random() < prob * 0.55) l += letters[i];
+      if (rand() < prob * 0.55) l += letters[i];
     }
     if (l) rows.push({ price: +p.toFixed(2), letters: l });
   }
