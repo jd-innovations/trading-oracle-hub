@@ -1,4 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+
+export interface ChartHandle {
+  fitContent: () => void;
+}
 import { toRgb, withAlpha } from "@/lib/color";
 
 export interface PriceLine {
@@ -19,17 +23,20 @@ function useThemeKey() {
   return key;
 }
 
-export function EsCandleChart({
-  data,
-  lines = [],
-  height = 320,
-}: {
+export const EsCandleChart = forwardRef<ChartHandle, {
   data: Array<{ time: number; open: number; high: number; low: number; close: number }>;
   lines?: PriceLine[];
   height?: number;
-}) {
+}>(function EsCandleChart({ data, lines = [], height = 320 }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<any>(null);
   const themeKey = useThemeKey();
+
+  useImperativeHandle(ref, () => ({
+    fitContent: () => {
+      chartRef.current?.timeScale().fitContent();
+    },
+  }), []);
 
   useEffect(() => {
     let disposed = false;
@@ -47,6 +54,7 @@ export function EsCandleChart({
       const bear = toRgb(styles.getPropertyValue("--bear"), "rgb(239,68,68)");
 
       chart = lib.createChart(containerRef.current, {
+        width: containerRef.current.clientWidth,
         height,
         localization: { locale: "en-US" },
         layout: {
@@ -63,6 +71,7 @@ export function EsCandleChart({
         timeScale: { borderColor: grid, timeVisible: true, secondsVisible: false },
         crosshair: { mode: 1 },
       });
+      chartRef.current = chart;
 
       const series = chart.addSeries(lib.CandlestickSeries, {
         upColor: bull,
@@ -96,12 +105,13 @@ export function EsCandleChart({
     return () => {
       disposed = true;
       resizeObserver?.disconnect();
+      chartRef.current = null;
       chart?.remove();
     };
   }, [data, lines, height, themeKey]);
 
   return <div ref={containerRef} className="w-full" style={{ height }} />;
-}
+});
 
 export function EquityChart({
   data,
