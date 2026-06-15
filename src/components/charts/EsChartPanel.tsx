@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EsCandleChart, type ChartHandle, type PriceLine } from "./Charts";
 import { ChartToolbar, type Symbol, type Timeframe } from "./ChartToolbar";
+import { OpeningRangesPopover } from "./OpeningRangesPopover";
 import { dailyPlan, esCandles, spxCandles, gexLevels } from "@/lib/mock/data";
 import { resampleCandles, filterRTH } from "@/lib/chart-utils";
 import { fmtPrice } from "@/lib/format";
+import { useOpeningRanges } from "@/lib/use-opening-ranges";
+import { computeZones } from "@/lib/opening-ranges";
 
 const TF_MIN: Record<Timeframe, number> = { "2m": 2, "5m": 5, "15m": 15, RTH: 2 };
 
