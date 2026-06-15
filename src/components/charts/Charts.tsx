@@ -98,6 +98,11 @@ export const EsCandleChart = forwardRef<ChartHandle, {
         });
       }
 
+      const primitive = new OpeningRangePrimitive();
+      series.attachPrimitive(primitive);
+      primitive.setZones(zonesRef.current);
+      primitiveRef.current = primitive;
+
       chart.timeScale().fitContent();
 
       resizeObserver = new ResizeObserver((entries) => {
@@ -109,10 +114,18 @@ export const EsCandleChart = forwardRef<ChartHandle, {
     return () => {
       disposed = true;
       resizeObserver?.disconnect();
+      primitiveRef.current = null;
       chartRef.current = null;
       chart?.remove();
     };
   }, [data, lines, height, themeKey]);
+
+  // Push zones into the primitive without recreating the chart.
+  const zonesRef = useRef<OpeningRangeZone[]>(zones);
+  useEffect(() => {
+    zonesRef.current = zones;
+    primitiveRef.current?.setZones(zones);
+  }, [zones]);
 
   return <div ref={containerRef} className="w-full" style={{ height }} />;
 });
