@@ -43,8 +43,7 @@ class LevelRenderer implements IPrimitivePaneRenderer {
         const clippedLeft = Math.max(0, left);
         const clippedRight = Math.min(mediaSize.width, right);
 
-        const dim = lvl.broken;
-        const alpha = dim ? 0.45 : 0.95;
+        const alpha = 0.95;
 
         // Line
         c.save();
@@ -93,7 +92,7 @@ class LevelRenderer implements IPrimitivePaneRenderer {
           attempts++;
         }
 
-        c.fillStyle = withAlpha(lvl.color, dim ? 0.18 : 0.85);
+        c.fillStyle = withAlpha(lvl.color, 0.85);
         c.fillRect(labelX, labelY, w, h);
         c.fillStyle = "rgba(10,10,10,0.95)";
         c.textBaseline = "middle";

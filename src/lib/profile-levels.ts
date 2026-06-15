@@ -352,16 +352,19 @@ export function computeProfileLevels(
     if (opts.include30m) {
       const pocs = compute30mPocs(sess.bars);
       for (const p of pocs) {
+        // Ray begins at the candle close (bucket end), not bucket open —
+        // otherwise the bars that formed the POC trivially "touch" it.
+        const candleClose = p.time + BRACKET_MIN * 60;
         const { time, broken } = findBreakRight(
           bars,
-          p.time,
+          candleClose,
           p.price,
           lastBarTime,
         );
         levels.push({
           kind: "poc30m",
           price: p.price,
-          startTime: p.time,
+          startTime: candleClose,
           endTime: time,
           label: `30m ${formatTimeLabel(p.time)}`,
           color: COLOR_POC30M,
