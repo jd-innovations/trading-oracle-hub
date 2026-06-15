@@ -54,6 +54,12 @@ export function EsChartPanel() {
     [showGex],
   );
 
+  const { configs: orConfigs, setConfigs: setOrConfigs, reset: resetOr } = useOpeningRanges();
+  const zones = useMemo(
+    () => computeZones(source, orConfigs, symbol),
+    [source, orConfigs, symbol],
+  );
+
   const handleFit = () => chartRef.current?.fitContent();
 
   const toggleFullscreen = async () => {
