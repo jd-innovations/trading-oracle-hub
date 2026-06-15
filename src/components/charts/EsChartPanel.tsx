@@ -61,6 +61,11 @@ export function EsChartPanel() {
     [source, orConfigs, symbol],
   );
 
+  const profileLevels = useMemo(() => {
+    if (symbol !== "ES") return [];
+    return computeProfileLevels(source, { include30m: timeframe === "30m" });
+  }, [symbol, source, timeframe]);
+
   const handleFit = () => chartRef.current?.fitContent();
 
   const toggleFullscreen = async () => {
