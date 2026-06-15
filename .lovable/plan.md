@@ -1,74 +1,79 @@
-# Why the charts are blank
+# Why charts are still blank
 
-The runtime error tells the whole story:
+The data is fine — ES mock candles are there. The crash is still a color-parse error inside `lightweight-charts`:
 
 ```
-Failed to parse color: lab(93.0481% -.822932 -1.65209)
-  at lightweight-charts...
+Failed to parse color: lab(93.0481 -0.822932 -1.65209)
+  at AttributionLogoWidget…
 ```
 
-Our theme tokens in `src/styles.css` are defined in `oklch()` (modern CSS color). When `Charts.tsx` reads them via `getComputedStyle(...).getPropertyValue('--card')`, the browser returns the raw `oklch(...)` / `lab(...)` string. `lightweight-charts` only parses legacy CSS color formats (hex / rgb / rgba / named) — it throws on `oklch` and `lab`, which kills the chart mount. That's also what triggers the React #418 hydration error you see right after — the failed effect leaves the SSR markup and client tree out of sync.
-
-So: charting is wired up correctly, the data is there, the library just can't read our color tokens.
+Our `toRgb()` helper uses `getComputedStyle(probe).color` to normalize colors. In current Chrome, when the input is `oklch(...)`, the computed value comes back as `lab(...)` (same color space family, not `rgb()`). lightweight-charts' parser only accepts hex / `rgb()` / `rgba()` / named — `lab()` throws, the chart never mounts, and you see a blank box. So switching to SPX or dummy data won't help; the same colors would still crash the chart.
 
 ## Fix
 
-Add one small helper and use it everywhere a CSS variable is handed to `lightweight-charts`.
+Swap the normalization technique. The Canvas 2D context's `fillStyle` setter is the only browser API that *always* returns a legacy `#rrggbb` / `rgba(...)` string regardless of input color space.
 
-### 1. New helper `src/lib/color.ts`
+### 1. Rewrite `src/lib/color.ts`
 
 ```ts
-// Resolve any CSS color string (oklch, lab, hsl, var(...), named)
-// into an rgb()/rgba() string the lightweight-charts parser accepts.
-export function toRgb(cssColor: string, fallback = "#888"): string {
-  if (typeof window === "undefined") return fallback;
+let ctx: CanvasRenderingContext2D | null = null;
+
+export function toRgb(cssColor: string, fallback = "#888888"): string {
+  if (typeof document === "undefined") return fallback;
+  const input = (cssColor || "").trim() || fallback;
+
+  // Resolve CSS vars / oklch / lab against the document first.
   const probe = document.createElement("span");
-  probe.style.color = cssColor || fallback;
+  probe.style.color = input;
   probe.style.display = "none";
   document.body.appendChild(probe);
-  const resolved = getComputedStyle(probe).color; // always rgb()/rgba()
+  const resolved = getComputedStyle(probe).color || input;
   probe.remove();
-  return resolved || fallback;
+
+  // Canvas fillStyle forces legacy hex/rgba, which lightweight-charts accepts.
+  if (!ctx) ctx = document.createElement("canvas").getContext("2d");
+  if (!ctx) return fallback;
+  try {
+    ctx.fillStyle = "#000";       // reset
+    ctx.fillStyle = resolved;     // browser converts; rejects invalid silently
+    const out = ctx.fillStyle as string;
+    return out || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+export function withAlpha(rgbColor: string, alpha: number): string {
+  // Accept "#rrggbb", "#rgb", "rgb(...)", "rgba(...)"
+  if (rgbColor.startsWith("#")) {
+    const hex = rgbColor.slice(1);
+    const full = hex.length === 3 ? hex.split("").map((c) => c + c).join("") : hex;
+    const r = parseInt(full.slice(0, 2), 16);
+    const g = parseInt(full.slice(2, 4), 16);
+    const b = parseInt(full.slice(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  const m = rgbColor.match(/(\d+(?:\.\d+)?)[,\s]+(\d+(?:\.\d+)?)[,\s]+(\d+(?:\.\d+)?)/);
+  if (!m) return rgbColor;
+  return `rgba(${m[1]}, ${m[2]}, ${m[3]}, ${alpha})`;
 }
 ```
 
-The browser's computed-style pass normalizes every modern color format to `rgb(r g b)` / `rgba(...)`, which lightweight-charts handles fine.
+That single change unblocks both `EsCandleChart` and `EquityChart` — no changes needed in `Charts.tsx`, `EsChartPanel`, mock data, or routes.
 
-### 2. Patch `src/components/charts/Charts.tsx`
+### 2. Address the secondary hydration warning
 
-In both `EsCandleChart` and `EquityChart`, wrap every `getPropertyValue(...)` with `toRgb(...)`:
+The `TpoProfile` row uses `Math.random()`-ish derived values that differ between server prerender and client mount, producing the `6,090.75` vs `6,090.00` mismatch shown in the console. This is unrelated to the blank-chart bug but worth flagging — fix in a follow-up by either:
+- generating the TPO data deterministically (seeded), or
+- gating `<TpoProfile compact />` with a client-only mount guard.
 
-```ts
-const text = toRgb(styles.getPropertyValue("--foreground"));
-const grid = toRgb(styles.getPropertyValue("--grid"));
-const bg   = toRgb(styles.getPropertyValue("--card"));
-const bull = toRgb(styles.getPropertyValue("--bull"));
-const bear = toRgb(styles.getPropertyValue("--bear"));
-const info = toRgb(styles.getPropertyValue("--info"));
-```
-
-Also replace the hand-rolled `withAlpha` in `EquityChart` (it appends `/ 0.4)` onto an `oklch(...)` string and produces another unparseable value). After `toRgb` we have `rgb(r g b)` and can build `rgba(r,g,b,a)` by parsing the three integers, or simpler: pass two pre-resolved colors — full and transparent — by setting alpha on the probe:
-
-```ts
-const infoSolid = toRgb("var(--info)");
-const infoFade  = toRgb("color-mix(in srgb, var(--info) 40%, transparent)");
-const infoZero  = toRgb("color-mix(in srgb, var(--info) 0%, transparent)");
-```
-
-(Or keep it simple: regex `rgb\((\d+),?\s*(\d+),?\s*(\d+)\)` out of `infoSolid` and rebuild `rgba(r,g,b,a)`.)
-
-### 3. Re-mount on theme change
-
-Today the chart only reads tokens once on mount, so toggling dark/light leaves stale colors. Add a `useTheme()` value (or read `document.documentElement.classList.contains('dark')`) into the effect's dep list so it rebuilds on theme switch. Low priority — separate from the blank-chart bug — but worth doing in the same pass.
+Not part of this plan unless you want it bundled.
 
 ## Files touched
 
-- **new** `src/lib/color.ts` — `toRgb` helper.
-- **edit** `src/components/charts/Charts.tsx` — route every CSS-var read through `toRgb`; fix `withAlpha` in `EquityChart`; add theme dep to effects.
-
-No changes needed to `EsChartPanel`, `TpoProfile` (CSS-only), routes, or mock data. After this, the Plan tab's ES candle chart, the Iron Fly SPX chart, and the Performance equity chart all render.
+- **edit** `src/lib/color.ts` — canvas-based `toRgb`, robust `withAlpha`.
 
 ## Out of scope
 
-- The `oklch` tokens themselves stay — they're correct for the app UI; only the chart needs rgb.
-- React #418 should disappear once the chart mounts cleanly. If it lingers, that's a separate SSR mismatch worth a follow-up.
+- Theme tokens stay in `oklch` — they're correct for the UI.
+- No data source change (ES mock stays). Once colors parse, the existing ES candles render.
