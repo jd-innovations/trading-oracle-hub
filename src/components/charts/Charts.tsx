@@ -6,6 +6,8 @@ export interface ChartHandle {
 import { toRgb, withAlpha } from "@/lib/color";
 import { OpeningRangePrimitive } from "./OpeningRangePrimitive";
 import type { OpeningRangeZone } from "@/lib/opening-ranges";
+import { ProfileLevelsPrimitive } from "./ProfileLevelsPrimitive";
+import type { ProfileLevel } from "@/lib/profile-levels";
 
 export interface PriceLine {
   price: number;

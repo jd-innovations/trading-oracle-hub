@@ -75,7 +75,7 @@ export const planResult: PlanResult = {
   score: 82,
 };
 
-// Generate ~200 bars of 2-min candles around the levels.
+// Generate ~200 bars of 2-min candles around the levels (used by SPX).
 function genCandles(seed: number, start: number, count = 200) {
   let s = seed;
   const rand = () => {
@@ -105,7 +105,59 @@ function genCandles(seed: number, start: number, count = 200) {
   return bars;
 }
 
-export const esCandles = genCandles(42, 6078);
+// Multi-session generator for ES — produces N weekday RTH sessions
+// (09:30–16:00 ET) of 2-min bars so profile-level computations have
+// enough historical data. Anchored to a fixed date for SSR stability.
+function genRthSessions(seed: number, start: number, sessions = 35) {
+  let s = seed;
+  const rand = () => {
+    s = (s * 9301 + 49297) % 233280;
+    return s / 233280;
+  };
+  const bars: Array<{ time: number; open: number; high: number; low: number; close: number }> = [];
+  let price = start;
+  // Anchor: Fri 06/12/2026 — work backwards `sessions` weekdays.
+  const anchor = new Date(Date.UTC(2026, 5, 12));
+  const days: Array<{ y: number; m: number; d: number }> = [];
+  const cursor = new Date(anchor);
+  while (days.length < sessions) {
+    const dow = cursor.getUTCDay();
+    if (dow !== 0 && dow !== 6) {
+      days.unshift({
+        y: cursor.getUTCFullYear(),
+        m: cursor.getUTCMonth(),
+        d: cursor.getUTCDate(),
+      });
+    }
+    cursor.setUTCDate(cursor.getUTCDate() - 1);
+  }
+  for (const day of days) {
+    // 09:30 ET == 13:30 UTC (assuming UTC-4 / EDT, matches filterRTH).
+    let t = Date.UTC(day.y, day.m, day.d, 13, 30) / 1000;
+    const sessionEnd = t + 6.5 * 3600; // 16:00 ET
+    while (t < sessionEnd) {
+      const drift = (rand() - 0.48) * 1.8;
+      const open = price;
+      const close = open + drift;
+      const high = Math.max(open, close) + rand() * 1.2;
+      const low = Math.min(open, close) - rand() * 1.2;
+      bars.push({
+        time: t,
+        open: +open.toFixed(2),
+        high: +high.toFixed(2),
+        low: +low.toFixed(2),
+        close: +close.toFixed(2),
+      });
+      price = close;
+      t += 120;
+    }
+    // Overnight drift between sessions
+    price += (rand() - 0.5) * 8;
+  }
+  return bars;
+}
+
+export const esCandles = genRthSessions(42, 6020, 35);
 export const spxCandles = genCandles(7, 6085).map((c) => ({
   ...c,
   open: +(c.open + 4).toFixed(2),
