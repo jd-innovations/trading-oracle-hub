@@ -34,6 +34,7 @@ export const EsCandleChart = forwardRef<ChartHandle, {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<any>(null);
   const primitiveRef = useRef<OpeningRangePrimitive | null>(null);
+  const zonesRef = useRef<OpeningRangeZone[]>(zones);
   const themeKey = useThemeKey();
 
   useImperativeHandle(ref, () => ({
