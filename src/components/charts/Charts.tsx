@@ -4,6 +4,8 @@ export interface ChartHandle {
   fitContent: () => void;
 }
 import { toRgb, withAlpha } from "@/lib/color";
+import { OpeningRangePrimitive } from "./OpeningRangePrimitive";
+import type { OpeningRangeZone } from "@/lib/opening-ranges";
 
 export interface PriceLine {
   price: number;
@@ -26,10 +28,12 @@ function useThemeKey() {
 export const EsCandleChart = forwardRef<ChartHandle, {
   data: Array<{ time: number; open: number; high: number; low: number; close: number }>;
   lines?: PriceLine[];
+  zones?: OpeningRangeZone[];
   height?: number;
-}>(function EsCandleChart({ data, lines = [], height = 320 }, ref) {
+}>(function EsCandleChart({ data, lines = [], zones = [], height = 320 }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<any>(null);
+  const primitiveRef = useRef<OpeningRangePrimitive | null>(null);
   const themeKey = useThemeKey();
 
   useImperativeHandle(ref, () => ({
