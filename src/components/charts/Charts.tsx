@@ -1,10 +1,22 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { toRgb, withAlpha } from "@/lib/color";
 
 export interface PriceLine {
   price: number;
   color: string;
   label: string;
   style?: "solid" | "dashed";
+}
+
+function useThemeKey() {
+  const [key, setKey] = useState(0);
+  useEffect(() => {
+    if (typeof MutationObserver === "undefined") return;
+    const mo = new MutationObserver(() => setKey((k) => k + 1));
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => mo.disconnect();
+  }, []);
+  return key;
 }
 
 export function EsCandleChart({
@@ -17,6 +29,7 @@ export function EsCandleChart({
   height?: number;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const themeKey = useThemeKey();
 
   useEffect(() => {
     let disposed = false;
@@ -27,17 +40,18 @@ export function EsCandleChart({
       const lib = await import("lightweight-charts");
       if (disposed || !containerRef.current) return;
       const styles = getComputedStyle(document.documentElement);
-      const text = styles.getPropertyValue("--foreground").trim() || "#ddd";
-      const grid = styles.getPropertyValue("--grid").trim() || "#333";
-      const bg = styles.getPropertyValue("--card").trim() || "#111";
+      const text = toRgb(styles.getPropertyValue("--foreground"), "rgb(221,221,221)");
+      const grid = toRgb(styles.getPropertyValue("--grid"), "rgb(51,51,51)");
+      const bg = toRgb(styles.getPropertyValue("--card"), "rgb(17,17,17)");
+      const bull = toRgb(styles.getPropertyValue("--bull"), "rgb(34,197,94)");
+      const bear = toRgb(styles.getPropertyValue("--bear"), "rgb(239,68,68)");
 
       chart = lib.createChart(containerRef.current, {
         height,
         layout: {
           background: { type: lib.ColorType.Solid, color: bg },
           textColor: text,
-          fontFamily:
-            "JetBrains Mono, ui-monospace, Menlo, monospace",
+          fontFamily: "JetBrains Mono, ui-monospace, Menlo, monospace",
           fontSize: 11,
         },
         grid: {
@@ -49,8 +63,6 @@ export function EsCandleChart({
         crosshair: { mode: 1 },
       });
 
-      const bull = styles.getPropertyValue("--bull").trim();
-      const bear = styles.getPropertyValue("--bear").trim();
       const series = chart.addSeries(lib.CandlestickSeries, {
         upColor: bull,
         downColor: bear,
@@ -64,7 +76,7 @@ export function EsCandleChart({
       for (const l of lines) {
         series.createPriceLine({
           price: l.price,
-          color: l.color,
+          color: toRgb(l.color, l.color),
           lineWidth: 1,
           lineStyle: l.style === "dashed" ? 2 : 0,
           axisLabelVisible: true,
@@ -85,7 +97,7 @@ export function EsCandleChart({
       resizeObserver?.disconnect();
       chart?.remove();
     };
-  }, [data, lines, height]);
+  }, [data, lines, height, themeKey]);
 
   return <div ref={containerRef} className="w-full" style={{ height }} />;
 }
@@ -98,6 +110,7 @@ export function EquityChart({
   height?: number;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const themeKey = useThemeKey();
 
   useEffect(() => {
     let disposed = false;
@@ -107,10 +120,10 @@ export function EquityChart({
       const lib = await import("lightweight-charts");
       if (disposed || !containerRef.current) return;
       const s = getComputedStyle(document.documentElement);
-      const text = s.getPropertyValue("--foreground").trim();
-      const grid = s.getPropertyValue("--grid").trim();
-      const bg = s.getPropertyValue("--card").trim();
-      const info = s.getPropertyValue("--info").trim();
+      const text = toRgb(s.getPropertyValue("--foreground"), "rgb(221,221,221)");
+      const grid = toRgb(s.getPropertyValue("--grid"), "rgb(51,51,51)");
+      const bg = toRgb(s.getPropertyValue("--card"), "rgb(17,17,17)");
+      const info = toRgb(s.getPropertyValue("--info"), "rgb(56,189,248)");
 
       chart = lib.createChart(containerRef.current, {
         height,
@@ -127,7 +140,6 @@ export function EquityChart({
         rightPriceScale: { borderColor: grid },
         timeScale: { borderColor: grid, timeVisible: false },
       });
-      const withAlpha = (c: string, a: number) => c.replace(/\)\s*$/, ` / ${a})`);
       const series = chart.addSeries(lib.AreaSeries, {
         lineColor: info,
         topColor: withAlpha(info, 0.4),
@@ -146,7 +158,7 @@ export function EquityChart({
       ro?.disconnect();
       chart?.remove();
     };
-  }, [data, height]);
+  }, [data, height, themeKey]);
 
   return <div ref={containerRef} className="w-full" style={{ height }} />;
 }
