@@ -48,6 +48,7 @@ export function EsCandleChart({
 
       chart = lib.createChart(containerRef.current, {
         height,
+        localization: { locale: "en-US" },
         layout: {
           background: { type: lib.ColorType.Solid, color: bg },
           textColor: text,
@@ -127,6 +128,7 @@ export function EquityChart({
 
       chart = lib.createChart(containerRef.current, {
         height,
+        localization: { locale: "en-US" },
         layout: {
           background: { type: lib.ColorType.Solid, color: bg },
           textColor: text,
