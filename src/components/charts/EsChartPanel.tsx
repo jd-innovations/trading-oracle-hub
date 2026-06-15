@@ -131,7 +131,18 @@ export function EsChartPanel() {
       }
     >
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
-        <h3 className="label-xs">{symbol} · {timeframe} · Daily Plan Levels</h3>
+        <h3 className="label-xs flex items-center gap-2">
+          <span>{symbol} · {timeframe} · Daily Plan Levels</span>
+          {symbol === "SPX" && spxIsLive && (
+            <span
+              className="inline-flex items-center gap-1 text-[10px] text-emerald-500"
+              title="Live Tradier feed"
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              LIVE
+            </span>
+          )}
+        </h3>
         <OpeningRangesPopover
           configs={orConfigs}
           onChange={setOrConfigs}
