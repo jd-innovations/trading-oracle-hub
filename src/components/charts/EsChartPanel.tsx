@@ -9,6 +9,7 @@ import { useOpeningRanges } from "@/lib/use-opening-ranges";
 import { computeZones } from "@/lib/opening-ranges";
 import { computeProfileLevels } from "@/lib/profile-levels";
 import { useSpxFeed } from "@/lib/use-spx-feed";
+import { useSpxGex } from "@/lib/use-spx-gex";
 
 const TF_MIN: Record<Timeframe, number> = { "2m": 2, "5m": 5, "15m": 15, "30m": 30, RTH: 2 };
 
