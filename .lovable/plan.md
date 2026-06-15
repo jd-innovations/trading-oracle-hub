@@ -1,79 +1,57 @@
-# Opening Range Indicator
+# RTH Profile Levels on ES Chart
 
-Add a configurable Opening Range (OR) indicator to the ES/SPX chart. Each zone captures the high/low of a user-defined time window (default 2 minutes), then projects forward as a shaded band + dashed boundary lines until price trades fully through (a later bar's high > zoneHigh AND low < zoneLow). Zones are managed via a popover from the chart toolbar and persisted to localStorage.
+Auto-render market-profile style levels on the ES candlestick chart. ES-only (skipped for SPX). Covers all visible RTH sessions, with a guaranteed minimum of 30 historical sessions of data. No UI toggles.
 
-## Default zones
+## What gets plotted
 
-All times ET. Six defaults, each 2 minutes long:
+Per RTH session (09:30–16:00 ET):
+- **POC** — TPO-derived: 30-min letter brackets (A=09:30, B=10:00, … M=15:30), price bin = 0.25 (ES tick). POC = bin touched by the most brackets.
+- **VAH / VAL** — 70% Value Area expanded around POC using standard TPO pair-step algorithm.
+- **Single prints** — any 0.25 bin touched by exactly one bracket (excluding session high/low extremes). Drawn as short bracketed segments.
+- **Poor High / Poor Low** — session extreme touched by ≥2 TPO brackets within 2 ticks (0.50) of the extreme.
 
-| Label | Time | Session |
-|---|---|---|
-| Globex PM Open | 18:00–18:02 | Globex only (ES) |
-| London Pre | 03:00–03:02 | Globex only (ES) |
-| Pre-Market | 07:00–07:02 | Globex only (ES) |
-| RTH Open | 09:30–09:32 | RTH (ES + SPX) |
-| Lunch Reversal | 11:30–11:32 | RTH (ES + SPX) |
-| Power Hour | 15:00–15:02 | RTH (ES + SPX) |
+Per 30-min RTH candle (only when chart timeframe = 30m, layered on top of session levels):
+- **30m POC** — busiest 0.25 bin computed from the underlying 2m bars inside that 30m window.
 
-For SPX, Globex-only zones are auto-hidden (SPX has no data outside RTH). User can still toggle them but they render nothing when no bars fall in the window.
+## Ray extension rule
 
-## Behavior
+Every level draws as a horizontal ray starting at the bar where it became "known" (session end for session levels, candle close for 30m POCs) and extends to the right until a later bar's range trades fully through it (`bar.low <= price <= bar.high`). The current/incomplete session draws levels live from the most recent completed bracket and extends to chart edge.
 
-- **Formation**: For each session day in the visible data, find bars whose timestamp falls inside `[start, start+duration)`. Zone high = max(high), zone low = min(low). Zone "born" at window end.
-- **Extension**: Walk forward from zone end. Zone stays active until a bar satisfies `bar.high > zoneHigh && bar.low < zoneLow` (full break of both sides). Right edge of the rectangle = that bar's time (or last bar if never broken).
-- **Per-day**: Each trading day produces its own zone instance. On a 200-bar mock dataset that's typically 1 day, but logic supports multiple.
+## Labels
 
-## Visuals
+Right-edge text labels rendered by the primitive:
+- `POC 06/13`, `VAH 06/13`, `VAL 06/13`, `SP 06/13`, `PDH 06/13` / `PDL 06/13` (poor high/low)
+- `30m POC 14:00` for per-30m POCs
 
-- Shaded rectangle between OR-high and OR-low, ~15% opacity zone color.
-- Dashed boundary lines at high and low (solid 1px, dashed style).
-- Text label at the left edge: e.g. `9:30 OR`.
-- Each default zone gets a distinct color (cycled from a small palette: cyan, amber, magenta, teal, orange, violet).
+Session-day stamp keeps multi-day overlap readable. Color palette uses existing theme tokens (POC = yellow/pivot, VAH = bull, VAL = bear, singles = muted info, poor H/L = warn).
 
-Implemented with `lightweight-charts` v5 primitives:
-- Rectangle band → `chart.addSeries(AreaSeries)` is not suitable; use **custom series primitive** via `ISeriesPrimitive` attached to the candlestick series. Primitive draws a filled rect + two dashed horizontal segments + a text label on the canvas in the price/time coordinate space.
-- One primitive instance per zone instance (per-day × per-config).
+## Data coverage
 
-## Configuration UI
+Mock generator currently produces ~200 × 2m bars (~6.6 hrs) — not enough for 30 RTH sessions. Extend `genCandles` (or add a session-aware generator) so `esCandles` spans ≥ 30 RTH days with realistic overnight gaps. SPX generator left untouched.
 
-New "Ranges" button in `ChartToolbar` (next to Fit / Fullscreen), opens a shadcn `Popover` containing:
+## Files
 
-- List of zones, each row: enable toggle (Switch) · color swatch · label (editable) · start time (HH:MM input) · duration minutes (number input, default 2) · session scope (RTH / Globex / Both — small Select) · delete button.
-- "Add zone" button at the bottom appends a blank row.
-- "Reset to defaults" link restores the 6 presets.
+**New:**
+- `src/lib/profile-levels.ts`
+  - `computeRthSessions(candles)` → groups bars into ET RTH session days
+  - `computeTpoProfile(sessionBars)` → `{ poc, vah, val, singles[], poorHigh?, poorLow? }` using 30m brackets + 0.25 bins + 70% VA expansion
+  - `compute30mPocs(sessionBars)` → `Array<{ time, poc }>`
+  - `extendRays(levels, allBars)` → assigns `rightEdge` per level using full-trade-through rule
+  - Exports `ProfileLevel` type `{ kind, price, startTime, endTime, label, color }`
+- `src/components/charts/ProfileLevelsPrimitive.ts` — `ISeriesPrimitive` that draws horizontal ray segments + right-edge labels. Mirrors `OpeningRangePrimitive` structure (uses `PriceToCoordinateConverter` / `TimeToCoordinateConverter`, theme-aware via `toRgb`).
 
-Changes apply live (no save button). On SPX, Globex-scoped rows are dimmed with a "RTH only" hint and produce no zones.
+**Modified:**
+- `src/lib/mock/data.ts` — extend ES candle generator to produce ≥30 RTH sessions worth of 2m bars with overnight gaps; keep deterministic seed.
+- `src/components/charts/Charts.tsx` — accept `profileLevels?: ProfileLevel[]` prop, attach a `ProfileLevelsPrimitive` alongside the existing `OpeningRangePrimitive`, push updates without remount (same pattern as `zonesRef`).
+- `src/components/charts/EsChartPanel.tsx` — when `symbol === "ES"`:
+  - memoize session levels from raw `esCandles`
+  - when `timeframe === "30m"` (add to `TF_MIN`/toolbar if not present — currently 2/5/15/RTH; will add `30m`) also compute per-30m POCs
+  - pass merged `profileLevels` to `EsCandleChart`; pass `[]` for SPX
+- `src/components/charts/ChartToolbar.tsx` — add `30m` to the `Timeframe` union and toggle group so the 30m-POC overlay has a way to be triggered.
 
-## Persistence
+## Out of scope
 
-- Stored in `localStorage` under key `chart.openingRanges.v1` as JSON array of `OpeningRangeConfig`.
-- Read on mount via a small `useOpeningRanges()` hook returning `[configs, setConfigs]` with debounced write.
-- If parse fails or key missing, seed with the 6 defaults.
-
-## Files to add / change
-
-**New**
-- `src/lib/opening-ranges.ts` — types (`OpeningRangeConfig`, `OpeningRangeZone`), `computeZones(candles, configs, symbol)` returning concrete zone instances with `{ startTime, endTime, high, low, label, color, broken }`, and `DEFAULT_OPENING_RANGES`. Pure functions, easy to unit-test.
-- `src/lib/use-opening-ranges.ts` — localStorage-backed hook.
-- `src/components/charts/OpeningRangePrimitive.ts` — `ISeriesPrimitive` implementation that renders a list of zones (rect fill, dashed top/bottom lines, label) using `PriceToCoordinateConverter` and `TimeToCoordinateConverter` from lightweight-charts v5.
-- `src/components/charts/OpeningRangesPopover.tsx` — shadcn Popover with the zone editor list (Switch, Input, Select, Button).
-
-**Modified**
-- `src/components/charts/Charts.tsx` — `EsCandleChart` accepts a new optional `zones?: OpeningRangeZone[]` prop. After creating the candlestick series, attach the `OpeningRangePrimitive` and call `primitive.setZones(zones)` whenever zones change. Re-attach on theme change like existing logic.
-- `src/components/charts/ChartToolbar.tsx` — add `Ranges` button (icon `Layers` from lucide-react). Wire `onOpenRanges` prop; render the popover from the panel.
-- `src/components/charts/EsChartPanel.tsx` — call `useOpeningRanges()`, compute zones via `computeZones(source, configs, symbol)` memoized on `[source, configs, symbol]`, pass to `EsCandleChart`. Mount `OpeningRangesPopover` controlled by toolbar button.
-
-## Edge cases
-
-- Window straddles midnight (e.g. 18:00 PM zone) — group bars by ET session day, not UTC date.
-- Empty zone (no bars in window for a given day) → skipped, not rendered.
-- Resampled timeframes (5m, 15m) — compute zones from the **raw 2m source**, not the resampled data, so the OR window resolution is preserved. Then render against whatever timeframe is shown; the primitive uses time coordinates so it lines up correctly.
-- RTH filter active + Globex zone → zone is skipped (no bars to anchor it).
-- Theme switch → primitive re-reads CSS color tokens via existing `toRgb` / `withAlpha` helpers in `src/lib/color.ts`.
-
-## Out of scope (for this iteration)
-
-- Alerts when price touches/breaks a zone.
-- Backtest stats on OR break rate.
-- Per-zone customization of break logic (single-side break, close-based, etc.) — only "full trade through" is implemented now.
-- Syncing config across devices (no Cloud yet).
+- No popover/toggle UI (auto-on for ES per spec).
+- No volume-weighted profile (using TPO + bar-count proxy where TPO needs sub-bracket detail).
+- No persistence — purely derived from candles.
+- SPX intentionally skipped.

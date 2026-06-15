@@ -6,6 +6,8 @@ export interface ChartHandle {
 import { toRgb, withAlpha } from "@/lib/color";
 import { OpeningRangePrimitive } from "./OpeningRangePrimitive";
 import type { OpeningRangeZone } from "@/lib/opening-ranges";
+import { ProfileLevelsPrimitive } from "./ProfileLevelsPrimitive";
+import type { ProfileLevel } from "@/lib/profile-levels";
 
 export interface PriceLine {
   price: number;
@@ -29,12 +31,18 @@ export const EsCandleChart = forwardRef<ChartHandle, {
   data: Array<{ time: number; open: number; high: number; low: number; close: number }>;
   lines?: PriceLine[];
   zones?: OpeningRangeZone[];
+  profileLevels?: ProfileLevel[];
   height?: number;
-}>(function EsCandleChart({ data, lines = [], zones = [], height = 320 }, ref) {
+}>(function EsCandleChart(
+  { data, lines = [], zones = [], profileLevels = [], height = 320 },
+  ref,
+) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<any>(null);
   const primitiveRef = useRef<OpeningRangePrimitive | null>(null);
+  const profileRef = useRef<ProfileLevelsPrimitive | null>(null);
   const zonesRef = useRef<OpeningRangeZone[]>(zones);
+  const levelsRef = useRef<ProfileLevel[]>(profileLevels);
   const themeKey = useThemeKey();
 
   useImperativeHandle(ref, () => ({
@@ -104,6 +112,11 @@ export const EsCandleChart = forwardRef<ChartHandle, {
       primitive.setZones(zonesRef.current);
       primitiveRef.current = primitive;
 
+      const profile = new ProfileLevelsPrimitive();
+      series.attachPrimitive(profile);
+      profile.setLevels(levelsRef.current);
+      profileRef.current = profile;
+
       chart.timeScale().fitContent();
 
       resizeObserver = new ResizeObserver((entries) => {
@@ -116,6 +129,7 @@ export const EsCandleChart = forwardRef<ChartHandle, {
       disposed = true;
       resizeObserver?.disconnect();
       primitiveRef.current = null;
+      profileRef.current = null;
       chartRef.current = null;
       chart?.remove();
     };
@@ -126,6 +140,11 @@ export const EsCandleChart = forwardRef<ChartHandle, {
     zonesRef.current = zones;
     primitiveRef.current?.setZones(zones);
   }, [zones]);
+
+  useEffect(() => {
+    levelsRef.current = profileLevels;
+    profileRef.current?.setLevels(profileLevels);
+  }, [profileLevels]);
 
   return <div ref={containerRef} className="w-full" style={{ height }} />;
 });

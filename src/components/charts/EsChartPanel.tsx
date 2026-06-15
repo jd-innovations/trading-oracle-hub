@@ -7,8 +7,9 @@ import { resampleCandles, filterRTH } from "@/lib/chart-utils";
 import { fmtPrice } from "@/lib/format";
 import { useOpeningRanges } from "@/lib/use-opening-ranges";
 import { computeZones } from "@/lib/opening-ranges";
+import { computeProfileLevels } from "@/lib/profile-levels";
 
-const TF_MIN: Record<Timeframe, number> = { "2m": 2, "5m": 5, "15m": 15, RTH: 2 };
+const TF_MIN: Record<Timeframe, number> = { "2m": 2, "5m": 5, "15m": 15, "30m": 30, RTH: 2 };
 
 const planLines: PriceLine[] = [
   { price: dailyPlan.t3Up, color: "rgba(34,197,94,0.9)", label: "T3↑" },
@@ -59,6 +60,11 @@ export function EsChartPanel() {
     () => computeZones(source, orConfigs, symbol),
     [source, orConfigs, symbol],
   );
+
+  const profileLevels = useMemo(() => {
+    if (symbol !== "ES") return [];
+    return computeProfileLevels(source, { include30m: timeframe === "30m" });
+  }, [symbol, source, timeframe]);
 
   const handleFit = () => chartRef.current?.fitContent();
 
@@ -149,7 +155,14 @@ export function EsChartPanel() {
         </div>
       )}
       <div className="flex-1 p-2">
-        <EsCandleChart ref={chartRef} data={data} lines={lines} zones={zones} height={chartHeight} />
+        <EsCandleChart
+          ref={chartRef}
+          data={data}
+          lines={lines}
+          zones={zones}
+          profileLevels={profileLevels}
+          height={chartHeight}
+        />
       </div>
     </div>
   );
