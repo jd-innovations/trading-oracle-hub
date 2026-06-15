@@ -122,7 +122,6 @@ export const EsCandleChart = forwardRef<ChartHandle, {
   }, [data, lines, height, themeKey]);
 
   // Push zones into the primitive without recreating the chart.
-  const zonesRef = useRef<OpeningRangeZone[]>(zones);
   useEffect(() => {
     zonesRef.current = zones;
     primitiveRef.current?.setZones(zones);
