@@ -8,6 +8,7 @@ import { fmtPrice } from "@/lib/format";
 import { useOpeningRanges } from "@/lib/use-opening-ranges";
 import { computeZones } from "@/lib/opening-ranges";
 import { computeProfileLevels } from "@/lib/profile-levels";
+import { useSpxFeed } from "@/lib/use-spx-feed";
 
 const TF_MIN: Record<Timeframe, number> = { "2m": 2, "5m": 5, "15m": 15, "30m": 30, RTH: 2 };
 
@@ -43,12 +44,24 @@ export function EsChartPanel() {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ChartHandle>(null);
 
-  const source = symbol === "ES" ? esCandles : spxCandles;
+  const { candles: spxLive, isLive: spxIsLive } = useSpxFeed(timeframe);
+
+  // For SPX prefer the live Tradier feed; fall back silently to mock if
+  // the feed is empty (no token / API down / not entitled).
+  const source =
+    symbol === "ES"
+      ? esCandles
+      : spxLive.length > 0
+        ? spxLive
+        : spxCandles;
+  // Live SPX is already resampled server-side; mock and ES still need it.
+  const useRawSource = symbol === "SPX" && spxLive.length > 0;
 
   const data = useMemo(() => {
+    if (useRawSource) return source;
     if (timeframe === "RTH") return filterRTH(source);
     return resampleCandles(source, TF_MIN[timeframe]);
-  }, [timeframe, source]);
+  }, [timeframe, source, useRawSource]);
 
   const lines = useMemo(
     () => (showGex ? [...planLines, ...gexLines] : planLines),
@@ -118,7 +131,18 @@ export function EsChartPanel() {
       }
     >
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
-        <h3 className="label-xs">{symbol} · {timeframe} · Daily Plan Levels</h3>
+        <h3 className="label-xs flex items-center gap-2">
+          <span>{symbol} · {timeframe} · Daily Plan Levels</span>
+          {symbol === "SPX" && spxIsLive && (
+            <span
+              className="inline-flex items-center gap-1 text-[10px] text-emerald-500"
+              title="Live Tradier feed"
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              LIVE
+            </span>
+          )}
+        </h3>
         <OpeningRangesPopover
           configs={orConfigs}
           onChange={setOrConfigs}
