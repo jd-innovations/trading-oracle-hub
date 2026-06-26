@@ -27,7 +27,16 @@ export const disconnectSchwab = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-// ---------- Manual code exchange (fallback when auto-redirect doesn't land) ----------
+// ---------- Authorize URL (PKCE) ----------
+
+export const startSchwabAuth = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }): Promise<{ url: string; redirectUri: string }> => {
+    const { buildAuthorizeUrl } = await import("./schwab.server");
+    return buildAuthorizeUrl(context.userId);
+  });
+
+// ---------- Manual code exchange (paste callback URL, code, or token JSON) ----------
 
 export const exchangeSchwabCodeManual = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -46,7 +55,7 @@ export const exchangeSchwabCodeManual = createServerFn({ method: "POST" })
       );
     }
     try {
-      const tok = await exchangeAuthCode(parsed.code);
+      const tok = await exchangeAuthCode(context.userId, parsed.code, parsed.state);
       await persistTokens(context.userId, tok);
       return { ok: true };
     } catch (e) {
