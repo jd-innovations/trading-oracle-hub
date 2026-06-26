@@ -147,12 +147,13 @@ export function EsChartPanel() {
           {symbol === "SPX" && spxIsLive && (
             <span
               className="inline-flex items-center gap-1 text-[10px] text-emerald-500"
-              title="Live Tradier feed"
+              title={`Live ${spxSource} feed`}
             >
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              LIVE
+              LIVE · {spxSource.toUpperCase()}
             </span>
           )}
+
         </h3>
         <OpeningRangesPopover
           configs={orConfigs}
