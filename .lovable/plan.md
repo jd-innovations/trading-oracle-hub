@@ -1,18 +1,17 @@
 ## Plan
 
-1. Update the Brokers page Schwab action so it is a plain external link to `https://developer.schwab.com/`, not a JavaScript OAuth/authorization launcher.
+1. **Broker settings page**
+   - Keep the Schwab button as a plain external link to `https://developer.schwab.com/` only.
+   - Rename/copy-adjust the UI so it clearly says this app does **not** open the Schwab brokerage authorization login.
+   - Make the manual paste box the primary action for connecting.
 
-2. Remove any remaining UI path that can send you directly to Schwab authorization from this page, including “Open portal again” button behavior.
+2. **Remove hidden authorization entry points**
+   - Search for any remaining Schwab OAuth/authorization launch code that could send you to `sws-gateway.schwab.com` or Schwab’s authorize flow.
+   - Remove or neutralize those UI calls so no in-app click can start the brokerage-login flow.
 
-3. Keep the manual paste fallback intact:
-   - You log in at the Schwab developer site.
-   - You use Schwab’s developer OAuth tool.
-   - You copy the resulting `oauth2-redirect.html?code=...` URL.
-   - You paste it into the app to exchange and save the token.
+3. **Improve manual token parsing feedback**
+   - Accept either the full `developer.schwab.com/oauth2-redirect.html?code=...` URL or the raw `code`.
+   - If the pasted value is not usable, show a direct message telling you to paste the callback URL/code from the developer portal OAuth tool.
 
-4. Clean up unused authorization URL client/server function exports if they are no longer referenced, so the app does not maintain a confusing direct-auth flow.
-
-## Technical notes
-
-- The live UI currently has a `connect()` function that opens `https://developer.schwab.com/`, but I’ll convert the rendered buttons to direct `<a>` links with `target="_blank"`, `rel="noopener noreferrer"`, and `referrerPolicy="no-referrer"` to avoid iframe/popup authorization behavior.
-- I’ll leave token exchange, saved connection status, disconnect, and live-data hooks unchanged.
+4. **Verify**
+   - Confirm the broker page contains only `https://developer.schwab.com/` as the external Schwab navigation target and no `sws-gateway` or auto-authorize link remains.
