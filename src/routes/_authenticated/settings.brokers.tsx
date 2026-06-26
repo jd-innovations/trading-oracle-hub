@@ -140,52 +140,42 @@ function BrokersPage() {
           </div>
           <div className="flex gap-2">
             {status?.connected ? (
-              <>
-                <a
-                  href="https://developer.schwab.com/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  referrerPolicy="no-referrer"
-                  className="rounded border border-input bg-background px-3 py-1.5 text-xs font-medium"
-                >
-                  Open developer portal
-                </a>
-                <button
-                  onClick={disconnect}
-                  disabled={busy}
-                  className="rounded bg-red-500/90 px-3 py-1.5 text-xs font-medium text-white"
-                >
-                  Disconnect
-                </button>
-              </>
-            ) : (
-              <a
-                href="https://developer.schwab.com/"
-                target="_blank"
-                rel="noopener noreferrer"
-                referrerPolicy="no-referrer"
-                className="rounded bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
+              <button
+                onClick={disconnect}
+                disabled={busy}
+                className="rounded bg-red-500/90 px-3 py-1.5 text-xs font-medium text-white"
               >
-                Open Schwab Developer Portal
-              </a>
+                Disconnect
+              </button>
+            ) : (
+              <button
+                onClick={startAuth}
+                disabled={authBusy}
+                className="rounded bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
+              >
+                {authBusy ? "Opening..." : "Authorize with Schwab"}
+              </button>
             )}
           </div>
         </div>
         <ol className="mt-3 list-decimal space-y-1 pl-4 text-[11px] text-muted-foreground">
-          <li>Sign in at developer.schwab.com with your developer credentials.</li>
           <li>
-            If you see <strong>Available authorizations</strong> / <strong>Authorized</strong>, that
-            only means Schwab authorized its Swagger tool. It is not connected here.
+            Click <strong>Authorize with Schwab</strong>. A new tab opens
+            api.schwabapi.com/v1/oauth/authorize with our PKCE challenge.
           </li>
+          <li>Approve the request with your Schwab account.</li>
           <li>
-            Paste either <code>developer.schwab.com/oauth2-redirect.html?code=...</code>, the raw
-            code, or token JSON containing <code>access_token</code> below.
+            You land on <code>developer.schwab.com/oauth2-redirect.html?code=...&amp;state=...</code>
+            . Copy that full URL and paste it below.
           </li>
         </ol>
-        <p className="mt-2 rounded border border-red-500/30 bg-red-500/10 px-2 py-1.5 text-[11px] text-red-400">
-          Do not paste or use <code>sws-gateway.schwab.com</code>; that is the brokerage login flow,
-          not the developer token callback.
-        </p>
+        {redirectUri && (
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Using redirect URI: <code>{redirectUri}</code> (must match your Schwab app
+            registration).
+          </p>
+        )}
+        {authMsg && <p className="mt-2 text-[11px] text-primary">{authMsg}</p>}
         <p className="mt-2 text-[11px] text-muted-foreground">
           Refresh tokens last 7 days; access tokens (30 min) auto-refresh.
         </p>
