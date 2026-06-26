@@ -39,6 +39,48 @@ export const disconnectSchwab = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+// ---------- Manual code exchange (fallback when auto-redirect doesn't land) ----------
+
+export const exchangeSchwabCodeManual = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    z.object({ codeOrUrl: z.string().trim().min(1).max(4000) }),
+  )
+  .handler(async ({ data, context }): Promise<{ ok: true }> => {
+    const { exchangeAuthCode, persistTokens } = await import("./schwab.server");
+    let code = data.codeOrUrl.trim();
+    // If a full URL was pasted, pull ?code= out of it.
+    if (/^https?:\/\//i.test(code)) {
+      try {
+        const u = new URL(code);
+        const c = u.searchParams.get("code");
+        if (!c) throw new Error("No 'code' parameter in URL");
+        code = c;
+      } catch (e) {
+        throw new Error(
+          e instanceof Error ? e.message : "Could not parse URL",
+        );
+      }
+    }
+    // Schwab sometimes URL-encodes the code; decode if needed.
+    try {
+      const decoded = decodeURIComponent(code);
+      if (decoded) code = decoded;
+    } catch {
+      /* ignore */
+    }
+    try {
+      const tok = await exchangeAuthCode(code);
+      await persistTokens(context.userId, tok);
+      return { ok: true };
+    } catch (e) {
+      console.error("[schwab] manual exchange failed", e);
+      throw new Error(
+        e instanceof Error ? e.message : "Token exchange failed",
+      );
+    }
+  });
+
 // ---------- SPX history via Schwab ----------
 
 export const getSchwabSpxHistory = createServerFn({ method: "POST" })

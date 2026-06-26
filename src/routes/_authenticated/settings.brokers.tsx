@@ -6,6 +6,7 @@ import {
   getSchwabStatus,
   getSchwabAuthorizeUrl,
   disconnectSchwab,
+  exchangeSchwabCodeManual,
   type SchwabStatus,
 } from "@/lib/schwab.functions";
 import { supabase } from "@/integrations/supabase/client";
@@ -27,8 +28,32 @@ function BrokersPage() {
   const fetchStatus = useServerFn(getSchwabStatus);
   const fetchAuthUrl = useServerFn(getSchwabAuthorizeUrl);
   const fetchDisconnect = useServerFn(disconnectSchwab);
+  const fetchManualExchange = useServerFn(exchangeSchwabCodeManual);
   const [status, setStatus] = useState<SchwabStatus | null>(null);
   const [busy, setBusy] = useState(false);
+  const [manualInput, setManualInput] = useState("");
+  const [manualMsg, setManualMsg] = useState<
+    { kind: "ok" | "err"; text: string } | null
+  >(null);
+  const [manualBusy, setManualBusy] = useState(false);
+
+  async function manualExchange() {
+    setManualBusy(true);
+    setManualMsg(null);
+    try {
+      await fetchManualExchange({ data: { codeOrUrl: manualInput } });
+      setManualMsg({ kind: "ok", text: "Schwab connected successfully." });
+      setManualInput("");
+      await refresh();
+    } catch (e) {
+      setManualMsg({
+        kind: "err",
+        text: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      setManualBusy(false);
+    }
+  }
 
   async function refresh() {
     try {
@@ -138,6 +163,39 @@ function BrokersPage() {
           a week. Access tokens (30 min) auto-refresh.
         </p>
       </div>
+
+      <div className="mt-4 rounded-md border border-border bg-card p-4">
+        <h2 className="text-base font-semibold">Paste callback URL manually</h2>
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          If Schwab doesn't redirect you back into this app, sign in at Schwab
+          and copy the full URL from your browser's address bar after approval
+          (it will contain <code>?code=...</code>). Paste it below — or just
+          the raw code — and we'll exchange it for tokens.
+        </p>
+        <textarea
+          value={manualInput}
+          onChange={(e) => setManualInput(e.target.value)}
+          placeholder="https://127.0.0.1/?code=...  — or just the code"
+          rows={3}
+          className="mt-3 w-full rounded border border-input bg-background px-3 py-2 font-mono text-xs"
+        />
+        {manualMsg && (
+          <p
+            className={`mt-2 text-xs ${manualMsg.kind === "ok" ? "text-emerald-500" : "text-red-500"}`}
+          >
+            {manualMsg.text}
+          </p>
+        )}
+        <button
+          onClick={manualExchange}
+          disabled={manualBusy || !manualInput.trim()}
+          className="mt-3 rounded bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
+        >
+          {manualBusy ? "Exchanging..." : "Exchange & save"}
+        </button>
+      </div>
+
+
 
       <button
         onClick={signOut}
