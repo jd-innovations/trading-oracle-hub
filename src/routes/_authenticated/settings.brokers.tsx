@@ -66,15 +66,6 @@ function BrokersPage() {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  function connect() {
-    window.open(
-      "https://developer.schwab.com/",
-      "_blank",
-      "noopener,noreferrer",
-    );
-  }
-
-
   async function disconnect() {
     setBusy(true);
     try {
@@ -128,12 +119,15 @@ function BrokersPage() {
           <div className="flex gap-2">
             {status?.connected ? (
               <>
-                <button
-                  onClick={connect}
+                <a
+                  href="https://developer.schwab.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  referrerPolicy="no-referrer"
                   className="rounded border border-input bg-background px-3 py-1.5 text-xs font-medium"
                 >
                   Open portal again
-                </button>
+                </a>
                 <button
                   onClick={disconnect}
                   disabled={busy}
@@ -143,12 +137,15 @@ function BrokersPage() {
                 </button>
               </>
             ) : (
-              <button
-                onClick={connect}
+              <a
+                href="https://developer.schwab.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                referrerPolicy="no-referrer"
                 className="rounded bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
               >
                 Open Schwab Developer Portal
-              </button>
+              </a>
             )}
           </div>
         </div>

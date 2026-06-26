@@ -5,7 +5,6 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import type { Candle } from "./chart-utils";
 
 const BASE = "https://api.schwabapi.com";
-export const SCHWAB_AUTH_URL = `${BASE}/v1/oauth/authorize`;
 const TOKEN_URL = `${BASE}/v1/oauth/token`;
 
 const ACCESS_TTL_SEC = 30 * 60; // Schwab access tokens last 30m
@@ -18,8 +17,7 @@ export class SchwabReauthRequired extends Error {
   }
 }
 
-// ---------- OAuth state signing (so the OAuth callback can identify the user
-// without a server-side session) ----------
+// ---------- OAuth state verification for legacy app callback support ----------
 
 function stateSecret(): string {
   return (
@@ -27,15 +25,6 @@ function stateSecret(): string {
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
     "lovable-fallback"
   );
-}
-
-export function signOAuthState(userId: string): string {
-  const ts = Date.now().toString();
-  const payload = `${userId}.${ts}`;
-  const sig = createHmac("sha256", stateSecret())
-    .update(payload)
-    .digest("hex");
-  return `${payload}.${sig}`;
 }
 
 export function verifyOAuthState(state: string): string | null {
@@ -73,15 +62,6 @@ function redirectUri(): string {
   const u = process.env.SCHWAB_REDIRECT_URI;
   if (!u) throw new Error("SCHWAB_REDIRECT_URI not set");
   return u;
-}
-
-export function buildAuthorizeUrl(state: string): string {
-  const u = new URL(SCHWAB_AUTH_URL);
-  u.searchParams.set("client_id", process.env.SCHWAB_APP_KEY ?? "");
-  u.searchParams.set("redirect_uri", redirectUri());
-  u.searchParams.set("response_type", "code");
-  u.searchParams.set("state", state);
-  return u.toString();
 }
 
 async function postToken(body: URLSearchParams): Promise<SchwabTokenResponse> {

@@ -21,16 +21,6 @@ export const getSchwabStatus = createServerFn({ method: "GET" })
     return getSchwabTokenInfo(context.userId);
   });
 
-export const getSchwabAuthorizeUrl = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }): Promise<{ url: string }> => {
-    const { signOAuthState, buildAuthorizeUrl } = await import(
-      "./schwab.server"
-    );
-    const state = signOAuthState(context.userId);
-    return { url: buildAuthorizeUrl(state) };
-  });
-
 export const disconnectSchwab = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<{ ok: true }> => {
