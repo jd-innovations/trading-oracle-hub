@@ -133,12 +133,14 @@ function parseManualSchwabCredential(input: string): ManualSchwabCredential {
     const hashToken = tokenFromObject(Object.fromEntries(parseParams(url.hash)));
     if (hashToken) return hashToken;
     const code = url.searchParams.get("code") ?? parseParams(url.hash).get("code");
+    const state =
+      url.searchParams.get("state") ?? parseParams(url.hash).get("state") ?? undefined;
     if (!code) {
       throw new Error(
-        "No code or access_token found. The 'Available authorizations' modal is only Swagger's status screen; paste the returned oauth2-redirect URL, raw code, or token JSON.",
+        "No code or access_token found. Paste the developer.schwab.com oauth2-redirect URL you landed on after authorizing.",
       );
     }
-    return { kind: "code", code: decodeMaybe(code) };
+    return { kind: "code", code: decodeMaybe(code), state: state ?? undefined };
   }
 
   if (raw.includes("access_token=") || raw.includes("refresh_token=")) {
