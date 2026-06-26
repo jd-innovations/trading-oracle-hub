@@ -47,9 +47,10 @@ export function EsChartPanel() {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ChartHandle>(null);
 
-  const { candles: spxLive, isLive: spxIsLive } = useSpxFeed(timeframe);
-  const { levels: spxGexLive, asOf: spxGexAsOf, isLive: spxGexIsLive } =
+  const { candles: spxLive, isLive: spxIsLive, source: spxSource } = useSpxFeed(timeframe);
+  const { levels: spxGexLive, asOf: spxGexAsOf, isLive: spxGexIsLive, source: spxGexSource } =
     useSpxGex(symbol === "SPX" && showGex);
+
 
   // For SPX prefer the live Tradier feed; fall back silently to mock if
   // the feed is empty (no token / API down / not entitled).
