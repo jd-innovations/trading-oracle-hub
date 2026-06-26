@@ -111,13 +111,18 @@ export async function persistProvidedTokens(
 ): Promise<void> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const now = Date.now();
-  const expiresIn = tok.expiresIn && tok.expiresIn > 0 ? tok.expiresIn : ACCESS_TTL_SEC;
-  const access_expires_at = tok.accessExpiresAt ?? new Date(
-    now + Math.max(expiresIn - 60, 60) * 1000,
-  ).toISOString();
-  const refresh_expires_at = tok.refreshExpiresAt ?? new Date(
-    now + (tok.refreshToken ? REFRESH_TTL_SEC : Math.max(expiresIn - 60, 60)) * 1000,
-  ).toISOString();
+  const expiresIn =
+    tok.expiresIn && tok.expiresIn > 0 ? tok.expiresIn : ACCESS_TTL_SEC;
+  const access_expires_at =
+    tok.accessExpiresAt ??
+    new Date(now + Math.max(expiresIn - 60, 60) * 1000).toISOString();
+  const refresh_expires_at =
+    tok.refreshExpiresAt ??
+    new Date(
+      now +
+        (tok.refreshToken ? REFRESH_TTL_SEC : Math.max(expiresIn - 60, 60)) *
+          1000,
+    ).toISOString();
   const { error } = await supabaseAdmin.from("schwab_tokens").upsert({
     user_id: userId,
     access_token: tok.accessToken,
@@ -141,7 +146,10 @@ export async function getSchwabAccessToken(userId: string): Promise<string> {
   if (new Date(data.access_expires_at).getTime() > Date.now() + 30_000) {
     return data.access_token;
   }
-  if (!data.refresh_token || new Date(data.refresh_expires_at).getTime() < Date.now()) {
+  if (
+    !data.refresh_token ||
+    new Date(data.refresh_expires_at).getTime() < Date.now()
+  ) {
     throw new SchwabReauthRequired();
   }
   // Refresh

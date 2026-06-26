@@ -89,7 +89,8 @@ function BrokersPage() {
       <h1 className="display text-2xl font-semibold">Brokers</h1>
       <p className="mt-1 text-sm text-muted-foreground">
         Connect Schwab data by pasting a developer portal callback URL, OAuth
-        code, or token JSON here. This app will not open the Schwab brokerage login.
+        code, or token JSON here. This app will not open the Schwab brokerage
+        login.
       </p>
 
       {connected === "schwab" && (
@@ -129,7 +130,7 @@ function BrokersPage() {
                   referrerPolicy="no-referrer"
                   className="rounded border border-input bg-background px-3 py-1.5 text-xs font-medium"
                 >
-                Open developer portal
+                  Open developer portal
                 </a>
                 <button
                   onClick={disconnect}
@@ -153,14 +154,18 @@ function BrokersPage() {
           </div>
         </div>
         <ol className="mt-3 list-decimal space-y-1 pl-4 text-[11px] text-muted-foreground">
-          <li>Sign in at developer.schwab.com with your developer credentials.</li>
           <li>
-            If you see <strong>Available authorizations</strong> / <strong>Authorized</strong>,
-            that only means Schwab authorized its Swagger tool. It is not connected here.
+            Sign in at developer.schwab.com with your developer credentials.
           </li>
           <li>
-            Paste either <code>developer.schwab.com/oauth2-redirect.html?code=...</code>,
-            the raw code, or token JSON containing <code>access_token</code> below.
+            If you see <strong>Available authorizations</strong> /{" "}
+            <strong>Authorized</strong>, that only means Schwab authorized its
+            Swagger tool. It is not connected here.
+          </li>
+          <li>
+            Paste either{" "}
+            <code>developer.schwab.com/oauth2-redirect.html?code=...</code>, the
+            raw code, or token JSON containing <code>access_token</code> below.
           </li>
         </ol>
         <p className="mt-2 rounded border border-red-500/30 bg-red-500/10 px-2 py-1.5 text-[11px] text-red-400">
@@ -180,8 +185,9 @@ function BrokersPage() {
         <p className="mt-1 text-[11px] text-muted-foreground">
           Paste the full developer portal callback URL containing{" "}
           <code>?code=...</code>, paste only the raw code, or paste token JSON like{" "}
-          <code>{`{"access_token":"...","refresh_token":"...","expires_in":1800}`}</code>.
-          The authorization URL shown inside Schwab's Swagger modal is not enough.
+          <code>{`{"access_token":"...","refresh_token":"...","expires_in":1800}`}</code>
+          . The authorization URL shown inside Schwab's Swagger modal is not
+          enough.
         </p>
         <textarea
           value={manualInput}
@@ -192,7 +198,9 @@ function BrokersPage() {
         />
         {manualMsg && (
           <p
-            className={`mt-2 text-xs ${manualMsg.kind === "ok" ? "text-emerald-500" : "text-red-500"}`}
+            className={`mt-2 text-xs ${
+              manualMsg.kind === "ok" ? "text-emerald-500" : "text-red-500"
+            }`}
           >
             {manualMsg.text}
           </p>
@@ -205,9 +213,6 @@ function BrokersPage() {
           {manualBusy ? "Saving..." : "Save / exchange credentials"}
         </button>
       </div>
-
-
-
       <button
         onClick={signOut}
         className="mt-6 text-xs text-muted-foreground hover:text-foreground"

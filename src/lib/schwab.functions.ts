@@ -4,8 +4,6 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Candle } from "./chart-utils";
 import type { GexLevel } from "./gex.server";
 
-
-
 // ---------- Status / disconnect / OAuth URL ----------
 
 export interface SchwabStatus {
@@ -33,11 +31,10 @@ export const disconnectSchwab = createServerFn({ method: "POST" })
 
 export const exchangeSchwabCodeManual = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
-    z.object({ codeOrUrl: z.string().trim().min(1).max(4000) }),
-  )
+  .inputValidator(z.object({ codeOrUrl: z.string().trim().min(1).max(4000) }))
   .handler(async ({ data, context }): Promise<{ ok: true }> => {
-    const { exchangeAuthCode, persistTokens, persistProvidedTokens } = await import("./schwab.server");
+    const { exchangeAuthCode, persistTokens, persistProvidedTokens } =
+      await import("./schwab.server");
     const parsed = parseManualSchwabCredential(data.codeOrUrl);
     if (parsed.kind === "token") {
       await persistProvidedTokens(context.userId, parsed.tokens);
@@ -54,9 +51,7 @@ export const exchangeSchwabCodeManual = createServerFn({ method: "POST" })
       return { ok: true };
     } catch (e) {
       console.error("[schwab] manual exchange failed", e);
-      throw new Error(
-        e instanceof Error ? e.message : "Token exchange failed",
-      );
+      throw new Error(e instanceof Error ? e.message : "Token exchange failed");
     }
   });
 
@@ -75,15 +70,19 @@ type ManualSchwabCredential =
 
 function parseManualSchwabCredential(input: string): ManualSchwabCredential {
   const raw = input.trim();
-  if (!raw) throw new Error("Paste the callback URL, raw code, or token JSON from Schwab.");
+  if (!raw)
+    throw new Error("Paste the callback URL, raw code, or token JSON from Schwab.");
   if (raw.includes("sws-gateway.schwab.com")) {
     throw new Error(
       "That is the Schwab brokerage login URL. The screenshot you sent is the Swagger authorization modal; it does not contain credentials for this app.",
     );
   }
 
-  const tokenFromObject = (obj: Record<string, unknown>): ManualSchwabCredential | null => {
-    const accessToken = stringValue(obj.access_token) ?? stringValue(obj.accessToken);
+  const tokenFromObject = (
+    obj: Record<string, unknown>,
+  ): ManualSchwabCredential | null => {
+    const accessToken =
+      stringValue(obj.access_token) ?? stringValue(obj.accessToken);
     if (!accessToken) return null;
     return {
       kind: "token",
@@ -91,10 +90,8 @@ function parseManualSchwabCredential(input: string): ManualSchwabCredential {
         accessToken,
         refreshToken: stringValue(obj.refresh_token) ?? stringValue(obj.refreshToken),
         expiresIn: numberValue(obj.expires_in) ?? numberValue(obj.expiresIn),
-        accessExpiresAt:
-          stringValue(obj.access_expires_at) ?? stringValue(obj.accessExpiresAt),
-        refreshExpiresAt:
-          stringValue(obj.refresh_expires_at) ?? stringValue(obj.refreshExpiresAt),
+        accessExpiresAt: stringValue(obj.access_expires_at) ?? stringValue(obj.accessExpiresAt),
+        refreshExpiresAt: stringValue(obj.refresh_expires_at) ?? stringValue(obj.refreshExpiresAt),
       },
     };
   };
@@ -108,12 +105,15 @@ function parseManualSchwabCredential(input: string): ManualSchwabCredential {
         if (token) return token;
       }
     } catch {
-      throw new Error("That JSON could not be parsed. Paste token JSON with access_token, or paste a callback URL with ?code=...");
+      throw new Error(
+        "That JSON could not be parsed. Paste token JSON with access_token, or paste a callback URL with ?code=...",
+      );
     }
   }
 
   const parseParams = (value: string): URLSearchParams => {
-    const normalized = value.startsWith("#") || value.startsWith("?") ? value.slice(1) : value;
+    const normalized =
+      value.startsWith("#") || value.startsWith("?") ? value.slice(1) : value;
     return new URLSearchParams(normalized);
   };
 
@@ -128,7 +128,8 @@ function parseManualSchwabCredential(input: string): ManualSchwabCredential {
     if (queryToken) return queryToken;
     const hashToken = tokenFromObject(Object.fromEntries(parseParams(url.hash)));
     if (hashToken) return hashToken;
-    const code = url.searchParams.get("code") ?? parseParams(url.hash).get("code");
+    const code =
+      url.searchParams.get("code") ?? parseParams(url.hash).get("code");
     if (!code) {
       throw new Error(
         "No code or access_token found. The 'Available authorizations' modal is only Swagger's status screen; paste the returned oauth2-redirect URL, raw code, or token JSON.",
@@ -150,7 +151,12 @@ function stringValue(value: unknown): string | undefined {
 }
 
 function numberValue(value: unknown): number | undefined {
-  const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  const n =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value)
+        : NaN;
   return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
