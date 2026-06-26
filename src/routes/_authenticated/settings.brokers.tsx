@@ -164,6 +164,39 @@ function BrokersPage() {
         </p>
       </div>
 
+      <div className="mt-4 rounded-md border border-border bg-card p-4">
+        <h2 className="text-base font-semibold">Paste callback URL manually</h2>
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          If Schwab doesn't redirect you back into this app, sign in at Schwab
+          and copy the full URL from your browser's address bar after approval
+          (it will contain <code>?code=...</code>). Paste it below — or just
+          the raw code — and we'll exchange it for tokens.
+        </p>
+        <textarea
+          value={manualInput}
+          onChange={(e) => setManualInput(e.target.value)}
+          placeholder="https://127.0.0.1/?code=...  — or just the code"
+          rows={3}
+          className="mt-3 w-full rounded border border-input bg-background px-3 py-2 font-mono text-xs"
+        />
+        {manualMsg && (
+          <p
+            className={`mt-2 text-xs ${manualMsg.kind === "ok" ? "text-emerald-500" : "text-red-500"}`}
+          >
+            {manualMsg.text}
+          </p>
+        )}
+        <button
+          onClick={manualExchange}
+          disabled={manualBusy || !manualInput.trim()}
+          className="mt-3 rounded bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
+        >
+          {manualBusy ? "Exchanging..." : "Exchange & save"}
+        </button>
+      </div>
+
+
+
       <button
         onClick={signOut}
         className="mt-6 text-xs text-muted-foreground hover:text-foreground"
