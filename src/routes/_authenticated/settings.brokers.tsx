@@ -171,7 +171,8 @@ function BrokersPage() {
         </div>
         <p className="mt-3 text-[11px] text-muted-foreground">
           Schwab refresh tokens last 7 days &mdash; you'll need to reconnect once
-          a week. Access tokens (30 min) auto-refresh.
+          a week. Access tokens (30 min) auto-refresh. Opens in the top window
+          or a new tab (Schwab blocks iframe embedding).
         </p>
       </div>
 
