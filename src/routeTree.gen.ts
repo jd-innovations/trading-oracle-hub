@@ -13,8 +13,12 @@ import { Route as PerformanceRouteImport } from './routes/performance'
 import { Route as JournalRouteImport } from './routes/journal'
 import { Route as IronFlyRouteImport } from './routes/iron-fly'
 import { Route as BalanceZonesRouteImport } from './routes/balance-zones'
+import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AnalysisRouteImport } from './routes/analysis'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthenticatedSettingsBrokersRouteImport } from './routes/_authenticated/settings.brokers'
+import { Route as ApiPublicSchwabCallbackRouteImport } from './routes/api/public/schwab/callback'
 
 const PerformanceRoute = PerformanceRouteImport.update({
   id: '/performance',
@@ -36,9 +40,18 @@ const BalanceZonesRoute = BalanceZonesRouteImport.update({
   path: '/balance-zones',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AnalysisRoute = AnalysisRouteImport.update({
   id: '/analysis',
   path: '/analysis',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -46,66 +59,100 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedSettingsBrokersRoute =
+  AuthenticatedSettingsBrokersRouteImport.update({
+    id: '/settings/brokers',
+    path: '/settings/brokers',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const ApiPublicSchwabCallbackRoute = ApiPublicSchwabCallbackRouteImport.update({
+  id: '/api/public/schwab/callback',
+  path: '/api/public/schwab/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/analysis': typeof AnalysisRoute
+  '/auth': typeof AuthRoute
   '/balance-zones': typeof BalanceZonesRoute
   '/iron-fly': typeof IronFlyRoute
   '/journal': typeof JournalRoute
   '/performance': typeof PerformanceRoute
+  '/settings/brokers': typeof AuthenticatedSettingsBrokersRoute
+  '/api/public/schwab/callback': typeof ApiPublicSchwabCallbackRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/analysis': typeof AnalysisRoute
+  '/auth': typeof AuthRoute
   '/balance-zones': typeof BalanceZonesRoute
   '/iron-fly': typeof IronFlyRoute
   '/journal': typeof JournalRoute
   '/performance': typeof PerformanceRoute
+  '/settings/brokers': typeof AuthenticatedSettingsBrokersRoute
+  '/api/public/schwab/callback': typeof ApiPublicSchwabCallbackRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/analysis': typeof AnalysisRoute
+  '/auth': typeof AuthRoute
   '/balance-zones': typeof BalanceZonesRoute
   '/iron-fly': typeof IronFlyRoute
   '/journal': typeof JournalRoute
   '/performance': typeof PerformanceRoute
+  '/_authenticated/settings/brokers': typeof AuthenticatedSettingsBrokersRoute
+  '/api/public/schwab/callback': typeof ApiPublicSchwabCallbackRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/analysis'
+    | '/auth'
     | '/balance-zones'
     | '/iron-fly'
     | '/journal'
     | '/performance'
+    | '/settings/brokers'
+    | '/api/public/schwab/callback'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/analysis'
+    | '/auth'
     | '/balance-zones'
     | '/iron-fly'
     | '/journal'
     | '/performance'
+    | '/settings/brokers'
+    | '/api/public/schwab/callback'
   id:
     | '__root__'
     | '/'
+    | '/_authenticated'
     | '/analysis'
+    | '/auth'
     | '/balance-zones'
     | '/iron-fly'
     | '/journal'
     | '/performance'
+    | '/_authenticated/settings/brokers'
+    | '/api/public/schwab/callback'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AnalysisRoute: typeof AnalysisRoute
+  AuthRoute: typeof AuthRoute
   BalanceZonesRoute: typeof BalanceZonesRoute
   IronFlyRoute: typeof IronFlyRoute
   JournalRoute: typeof JournalRoute
   PerformanceRoute: typeof PerformanceRoute
+  ApiPublicSchwabCallbackRoute: typeof ApiPublicSchwabCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -138,11 +185,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BalanceZonesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/analysis': {
       id: '/analysis'
       path: '/analysis'
       fullPath: '/analysis'
       preLoaderRoute: typeof AnalysisRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -152,16 +213,44 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/settings/brokers': {
+      id: '/_authenticated/settings/brokers'
+      path: '/settings/brokers'
+      fullPath: '/settings/brokers'
+      preLoaderRoute: typeof AuthenticatedSettingsBrokersRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/api/public/schwab/callback': {
+      id: '/api/public/schwab/callback'
+      path: '/api/public/schwab/callback'
+      fullPath: '/api/public/schwab/callback'
+      preLoaderRoute: typeof ApiPublicSchwabCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
+interface AuthenticatedRouteRouteChildren {
+  AuthenticatedSettingsBrokersRoute: typeof AuthenticatedSettingsBrokersRoute
+}
+
+const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedSettingsBrokersRoute: AuthenticatedSettingsBrokersRoute,
+}
+
+const AuthenticatedRouteRouteWithChildren =
+  AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AnalysisRoute: AnalysisRoute,
+  AuthRoute: AuthRoute,
   BalanceZonesRoute: BalanceZonesRoute,
   IronFlyRoute: IronFlyRoute,
   JournalRoute: JournalRoute,
   PerformanceRoute: PerformanceRoute,
+  ApiPublicSchwabCallbackRoute: ApiPublicSchwabCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

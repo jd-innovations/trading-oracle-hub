@@ -47,9 +47,10 @@ export function EsChartPanel() {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ChartHandle>(null);
 
-  const { candles: spxLive, isLive: spxIsLive } = useSpxFeed(timeframe);
-  const { levels: spxGexLive, asOf: spxGexAsOf, isLive: spxGexIsLive } =
+  const { candles: spxLive, isLive: spxIsLive, source: spxSource } = useSpxFeed(timeframe);
+  const { levels: spxGexLive, asOf: spxGexAsOf, isLive: spxGexIsLive, source: spxGexSource } =
     useSpxGex(symbol === "SPX" && showGex);
+
 
   // For SPX prefer the live Tradier feed; fall back silently to mock if
   // the feed is empty (no token / API down / not entitled).
@@ -146,12 +147,13 @@ export function EsChartPanel() {
           {symbol === "SPX" && spxIsLive && (
             <span
               className="inline-flex items-center gap-1 text-[10px] text-emerald-500"
-              title="Live Tradier feed"
+              title={`Live ${spxSource} feed`}
             >
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              LIVE
+              LIVE · {spxSource.toUpperCase()}
             </span>
           )}
+
         </h3>
         <OpeningRangesPopover
           configs={orConfigs}
@@ -176,12 +178,13 @@ export function EsChartPanel() {
           {symbol === "SPX" && spxGexIsLive && (
             <span
               className="mono inline-flex items-center gap-1 rounded border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-500"
-              title={`Tradier GEX · ${new Date(spxGexAsOf * 1000).toLocaleTimeString()}`}
+              title={`${spxGexSource} GEX · ${new Date(spxGexAsOf * 1000).toLocaleTimeString()}`}
             >
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              GEX LIVE
+              GEX · {spxGexSource.toUpperCase()}
             </span>
           )}
+
           {activeGex.map((g) => (
             <span
               key={g.label}

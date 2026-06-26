@@ -73,9 +73,16 @@ export function SideNav() {
           );
         })}
       </ul>
+      <Link
+        to="/settings/brokers"
+        className="border-t border-border px-3 py-2 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+      >
+        Brokers &amp; Data
+      </Link>
       <div className="border-t border-border p-3 text-[10px] uppercase tracking-widest text-muted-foreground">
         v0.1 · shell
       </div>
+
     </aside>
   );
 }

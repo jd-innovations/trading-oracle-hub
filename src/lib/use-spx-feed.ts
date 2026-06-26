@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { getSpxHistory, getSpxStreamSession } from "./spx-feed.functions";
+import {
+  getSchwabSpxHistory,
+  getSchwabStreamSession,
+  type SchwabStreamSessionDTO,
+} from "./schwab.functions";
+import { supabase } from "@/integrations/supabase/client";
 import type { Candle } from "./chart-utils";
 import type { Timeframe } from "@/components/charts/ChartToolbar";
 
@@ -12,72 +18,237 @@ const TF_MIN: Record<Timeframe, number> = {
   RTH: 2,
 };
 
-interface TradeMsg {
+export type FeedSource = "schwab" | "tradier" | "mock";
+
+interface TradierTradeMsg {
   type?: string;
   symbol?: string;
   price?: number;
-  size?: number;
   date?: number; // ms
-  last?: number;
+}
+
+interface SchwabStreamMsg {
+  response?: Array<{
+    service?: string;
+    command?: string;
+    content?: { code?: number; msg?: string };
+  }>;
+  data?: Array<{
+    service?: string;
+    timestamp?: number;
+    content?: Array<Record<string | number, unknown>>;
+  }>;
 }
 
 /**
- * Live SPX feed from Tradier. Returns the most recent N-minute candles
- * (resampled server-side) and updates the tail bar live via WebSocket.
- * If Tradier is unreachable, returns { candles: [], isLive: false } so the
- * caller can fall back to mock data silently.
+ * Live SPX feed. Tries Schwab first (if signed in + connected), then
+ * Tradier, then falls back silently to mock.
  */
 export function useSpxFeed(timeframe: Timeframe) {
   const [candles, setCandles] = useState<Candle[]>([]);
   const [isLive, setIsLive] = useState(false);
-  const fetchHistory = useServerFn(getSpxHistory);
-  const fetchSession = useServerFn(getSpxStreamSession);
+  const [source, setSource] = useState<FeedSource>("mock");
+
+  const fetchSchwabHistory = useServerFn(getSchwabSpxHistory);
+  const fetchTradierHistory = useServerFn(getSpxHistory);
+  const fetchSchwabSession = useServerFn(getSchwabStreamSession);
+  const fetchTradierSession = useServerFn(getSpxStreamSession);
+
   const wsRef = useRef<WebSocket | null>(null);
   const tfRef = useRef<Timeframe>(timeframe);
   tfRef.current = timeframe;
 
-  // Initial history + on-timeframe-change refetch.
+  // History
   useEffect(() => {
     let cancelled = false;
     const tf: Timeframe = timeframe === "RTH" ? "2m" : timeframe;
-    fetchHistory({ data: { timeframe: tf, lookbackDays: 5 } })
-      .then((res) => {
-        if (cancelled) return;
-        setCandles(res.candles ?? []);
-      })
-      .catch(() => {
-        if (!cancelled) setCandles([]);
-      });
+    (async () => {
+      // Try Schwab if user is signed in
+      const { data: s } = await supabase.auth.getSession();
+      if (s.session) {
+        try {
+          const r = await fetchSchwabHistory({
+            data: { timeframe: tf, lookbackDays: 5 },
+          });
+          if (!cancelled && r.candles?.length) {
+            setCandles(r.candles);
+            setSource("schwab");
+            return;
+          }
+        } catch {
+          /* fall through */
+        }
+      }
+      try {
+        const r = await fetchTradierHistory({
+          data: { timeframe: tf, lookbackDays: 5 },
+        });
+        if (!cancelled) {
+          setCandles(r.candles ?? []);
+          setSource(r.candles?.length ? "tradier" : "mock");
+        }
+      } catch {
+        if (!cancelled) {
+          setCandles([]);
+          setSource("mock");
+        }
+      }
+    })();
     return () => {
       cancelled = true;
     };
-  }, [timeframe, fetchHistory]);
+  }, [timeframe, fetchSchwabHistory, fetchTradierHistory]);
 
-  // One streaming session, persists across timeframe changes.
+  // Stream
   useEffect(() => {
     let cancelled = false;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let backoff = 1000;
 
-    const connect = async () => {
-      if (cancelled) return;
-      const session = await fetchSession().catch(() => null);
-      if (cancelled || !session) {
-        setIsLive(false);
-        return;
-      }
+    const aggregateTick = (priceVal: number, tsMs: number) => {
+      const ts = Math.floor(tsMs / 1000);
+      const minutes = TF_MIN[tfRef.current];
+      const bucketSec = minutes * 60;
+      const bucketStart = Math.floor(ts / bucketSec) * bucketSec;
+      setCandles((prev) => {
+        if (!prev.length) return prev;
+        const last = prev[prev.length - 1];
+        if (last.time === bucketStart) {
+          return [
+            ...prev.slice(0, -1),
+            {
+              time: last.time,
+              open: last.open,
+              high: Math.max(last.high, priceVal),
+              low: Math.min(last.low, priceVal),
+              close: priceVal,
+            },
+          ];
+        }
+        if (bucketStart > last.time) {
+          return [
+            ...prev,
+            {
+              time: bucketStart,
+              open: priceVal,
+              high: priceVal,
+              low: priceVal,
+              close: priceVal,
+            },
+          ];
+        }
+        return prev;
+      });
+    };
+
+    const connectSchwab = async (): Promise<boolean> => {
+      const session = await fetchSchwabSession().catch(() => null);
+      if (cancelled || !session) return false;
       let ws: WebSocket;
       try {
         ws = new WebSocket(session.wsUrl);
       } catch {
-        setIsLive(false);
-        return;
+        return false;
       }
       wsRef.current = ws;
+      const requestId = { n: 0 };
+      const nextId = () => String(++requestId.n);
 
       ws.onopen = () => {
         backoff = 1000;
+        // LOGIN
+        ws.send(
+          JSON.stringify({
+            requests: [
+              {
+                service: "ADMIN",
+                requestid: nextId(),
+                command: "LOGIN",
+                SchwabClientCustomerId: session.schwabClientCustomerId,
+                SchwabClientCorrelId: session.schwabClientCorrelId,
+                parameters: {
+                  Authorization: session.accessToken,
+                  SchwabClientChannel: session.schwabClientChannel,
+                  SchwabClientFunctionId: session.schwabClientFunctionId,
+                },
+              },
+            ],
+          }),
+        );
+        // SUBS — LEVELONE_EQUITIES covers $SPX index; fields 1=bid 2=ask 3=last 35=quoteTime
+        ws.send(
+          JSON.stringify({
+            requests: [
+              {
+                service: "LEVELONE_EQUITIES",
+                requestid: nextId(),
+                command: "SUBS",
+                SchwabClientCustomerId: session.schwabClientCustomerId,
+                SchwabClientCorrelId: session.schwabClientCorrelId,
+                parameters: {
+                  keys: session.symbols.join(","),
+                  fields: "0,1,2,3,35",
+                },
+              },
+            ],
+          }),
+        );
         setIsLive(true);
+        setSource("schwab");
+      };
+
+      ws.onmessage = (ev) => {
+        let msg: SchwabStreamMsg;
+        try {
+          msg = JSON.parse(typeof ev.data === "string" ? ev.data : "");
+        } catch {
+          return;
+        }
+        if (msg.response) {
+          // LOGIN ack / SUBS ack — ignore unless code != 0
+          for (const r of msg.response) {
+            if (r.content?.code && r.content.code !== 0) {
+              console.warn("[schwab stream]", r.service, r.command, r.content);
+            }
+          }
+        }
+        if (msg.data) {
+          for (const d of msg.data) {
+            if (d.service !== "LEVELONE_EQUITIES" || !d.content) continue;
+            const ts = d.timestamp ?? Date.now();
+            for (const c of d.content) {
+              // Schwab returns numeric-keyed fields. 3 = lastPrice.
+              const last = (c["3"] ?? c[3]) as number | undefined;
+              if (typeof last === "number") aggregateTick(last, ts);
+            }
+          }
+        }
+      };
+
+      ws.onerror = () => setIsLive(false);
+      ws.onclose = () => {
+        setIsLive(false);
+        if (cancelled) return;
+        reconnectTimer = setTimeout(connect, backoff);
+        backoff = Math.min(backoff * 2, 30000);
+      };
+      return true;
+    };
+
+    const connectTradier = async (): Promise<boolean> => {
+      const session = await fetchTradierSession().catch(() => null);
+      if (cancelled || !session) return false;
+      let ws: WebSocket;
+      try {
+        ws = new WebSocket(session.wsUrl);
+      } catch {
+        return false;
+      }
+      wsRef.current = ws;
+      ws.onopen = () => {
+        backoff = 1000;
+        setIsLive(true);
+        setSource("tradier");
         ws.send(
           JSON.stringify({
             symbols: [session.symbol],
@@ -87,58 +258,33 @@ export function useSpxFeed(timeframe: Timeframe) {
           }),
         );
       };
-
       ws.onmessage = (ev) => {
-        let msg: TradeMsg;
+        let msg: TradierTradeMsg;
         try {
           msg = JSON.parse(typeof ev.data === "string" ? ev.data : "");
         } catch {
           return;
         }
         if (msg.type !== "trade" || msg.price == null) return;
-        const ts = Math.floor((msg.date ?? Date.now()) / 1000);
-        const minutes = TF_MIN[tfRef.current];
-        const bucketSec = minutes * 60;
-        const bucketStart = Math.floor(ts / bucketSec) * bucketSec;
-        const price = msg.price;
-
-        setCandles((prev) => {
-          if (!prev.length) return prev;
-          const last = prev[prev.length - 1];
-          if (last.time === bucketStart) {
-            const next: Candle = {
-              time: last.time,
-              open: last.open,
-              high: Math.max(last.high, price),
-              low: Math.min(last.low, price),
-              close: price,
-            };
-            return [...prev.slice(0, -1), next];
-          }
-          if (bucketStart > last.time) {
-            const next: Candle = {
-              time: bucketStart,
-              open: price,
-              high: price,
-              low: price,
-              close: price,
-            };
-            return [...prev, next];
-          }
-          return prev;
-        });
+        aggregateTick(msg.price, msg.date ?? Date.now());
       };
-
-      ws.onerror = () => {
-        setIsLive(false);
-      };
-
+      ws.onerror = () => setIsLive(false);
       ws.onclose = () => {
         setIsLive(false);
         if (cancelled) return;
         reconnectTimer = setTimeout(connect, backoff);
         backoff = Math.min(backoff * 2, 30000);
       };
+      return true;
+    };
+
+    const connect = async () => {
+      if (cancelled) return;
+      const { data: s } = await supabase.auth.getSession();
+      if (s.session) {
+        if (await connectSchwab()) return;
+      }
+      await connectTradier();
     };
 
     connect();
@@ -150,7 +296,14 @@ export function useSpxFeed(timeframe: Timeframe) {
       wsRef.current = null;
       if (ws && ws.readyState <= 1) ws.close();
     };
-  }, [fetchSession]);
+  }, [fetchSchwabSession, fetchTradierSession]);
 
-  return { candles, isLive };
+  return { candles, isLive, source } satisfies {
+    candles: Candle[];
+    isLive: boolean;
+    source: FeedSource;
+  };
 }
+
+// Keep types used elsewhere
+export type { SchwabStreamSessionDTO };
