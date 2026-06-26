@@ -182,15 +182,10 @@ function BrokersPage() {
       </div>
 
       <div className="mt-4 rounded-md border-2 border-primary/50 bg-card p-4">
-        <h2 className="text-base font-semibold">Paste credentials manually</h2>
-        <p className="mt-1 text-[11px] text-primary">
-          This is the only connection path used by this app.
-        </p>
+        <h2 className="text-base font-semibold">Paste callback URL</h2>
         <p className="mt-1 text-[11px] text-muted-foreground">
-          Paste the full developer portal callback URL containing <code>?code=...</code>, paste only
-          the raw code, or paste token JSON like{" "}
-          <code>{`{"access_token":"...","refresh_token":"...","expires_in":1800}`}</code>. The
-          authorization URL shown inside Schwab's Swagger modal is not enough.
+          After authorizing, paste the full <code>developer.schwab.com/oauth2-redirect.html?code=…&amp;state=…</code>{" "}
+          URL. Token JSON with <code>access_token</code> is also accepted as a fallback.
         </p>
         <textarea
           value={manualInput}
