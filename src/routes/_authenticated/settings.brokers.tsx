@@ -72,7 +72,18 @@ function BrokersPage() {
     setBusy(true);
     try {
       const { url } = await fetchAuthUrl();
-      window.location.assign(url);
+      // Lovable preview is iframed; Schwab sends X-Frame-Options: DENY, so
+      // navigating the iframe shows "refused to connect". Break out to the
+      // top window, or open a new tab if cross-origin blocks top access.
+      try {
+        if (window.top && window.top !== window.self) {
+          window.top.location.href = url;
+        } else {
+          window.location.href = url;
+        }
+      } catch {
+        window.open(url, "_blank", "noopener,noreferrer");
+      }
     } catch (e) {
       console.error(e);
       setBusy(false);
