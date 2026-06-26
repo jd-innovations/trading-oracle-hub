@@ -1,29 +1,37 @@
-## Goal
-Add a manual fallback for connecting Schwab in case the OAuth auto-redirect to `/api/public/schwab/callback` doesn't land back in the app (common with iframe previews / Schwab's URL rewriting). You'll be able to paste the full callback URL (or just the `code` parameter) and we'll exchange it for tokens server-side.
+## Problem
 
-## Changes
+`sws-gateway.schwab.com refused to connect` happens because the Lovable preview runs inside an iframe and the **Connect Schwab** button calls `window.location.assign(url)`, which tries to load Schwab's OAuth page inside that same iframe. Schwab sends `X-Frame-Options: DENY` / a strict CSP, so the browser blocks the navigation and you see the "refused to connect" page.
 
-### 1. New server function — `exchangeSchwabCodeManual`
-File: `src/lib/schwab.functions.ts`
-- Auth-gated (`requireSupabaseAuth`).
-- Input: `{ codeOrUrl: string }` validated with Zod (trim, max 4000 chars).
-- Parses input: if it looks like a URL, extract `?code=` (and `state` if present); otherwise treat as raw code.
-- Calls `exchangeAuthCode(code)` and `persistTokens(userId, tok)` from `schwab.server.ts` — no state verification required for the manual path since the user is already authenticated via Supabase.
-- Returns `{ ok: true }` or throws with a clean message on Schwab token-endpoint failure.
+## Fix
 
-### 2. Manual paste UI on Brokers page
-File: `src/routes/_authenticated/settings.brokers.tsx`
-- Below the existing "Connect Schwab" card, add a collapsible "Paste callback URL manually" section.
-- Textarea + "Exchange & save" button wired to the new server fn.
-- Show success/error inline; on success, call `refresh()` to update connection status.
-- Brief helper text: "After signing in at Schwab, copy the full URL from your browser's address bar (it will start with `https://...?code=...`) and paste it here."
+Open Schwab's authorize URL in the **top-level window**, not the iframe.
 
-### 3. (No DB / schema changes, no new secrets.)
+### Change in `src/routes/_authenticated/settings.brokers.tsx`
+
+In `connect()`, replace:
+
+```ts
+window.location.assign(url);
+```
+
+with a top-window navigation that also falls back to a new tab if we're sandboxed and can't reach `window.top`:
+
+```ts
+try {
+  if (window.top && window.top !== window.self) {
+    window.top.location.href = url;
+  } else {
+    window.location.href = url;
+  }
+} catch {
+  // Cross-origin frame blocks top access — open in a new tab instead.
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+```
+
+Also update the helper text under the Connect button to mention: "Opens in a new tab if the preview is embedded." So you're not surprised when it pops out.
 
 ## Out of scope
-- No change to the existing auto-redirect callback route — it stays as the primary path.
-- No change to the Schwab OAuth URL builder or token refresh logic.
 
-## Technical notes
-- Manual path safely skips `verifyOAuthState` because the user is authenticated by Supabase at the moment of paste, so we know which `user_id` to bind the tokens to.
-- Code extraction handles both `https://.../callback?code=ABC&state=...` and raw `ABC` formats; URL-decode the code before sending to Schwab.
+- No backend changes. OAuth URL builder, token exchange, callback route, and manual-paste fallback stay as-is.
+- `SCHWAB_REDIRECT_URI` is unchanged. If you've left it pointed at `https://developer.schwab.com/oauth2-redirect.html`, keep using the **Paste callback URL manually** card after approval — that flow already works once the Schwab page actually loads.
