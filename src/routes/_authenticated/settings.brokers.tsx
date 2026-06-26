@@ -66,28 +66,14 @@ function BrokersPage() {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  async function connect() {
-    setBusy(true);
-    try {
-      const { url } = await fetchAuthUrl();
-      // Lovable preview is iframed; Schwab sends X-Frame-Options: DENY, so
-      // navigating the iframe shows "refused to connect". Break out to the
-      // top window, or open a new tab if cross-origin blocks top access.
-      try {
-        if (window.top && window.top !== window.self) {
-          window.top.location.href = url;
-        } else {
-          window.location.href = url;
-        }
-      } catch {
-        window.open(url, "_blank", "noopener,noreferrer");
-      }
-    } catch (e) {
-      console.error(e);
-      setBusy(false);
-    }
+  function connect() {
+    window.open(
+      "https://developer.schwab.com/",
+      "_blank",
+      "noopener,noreferrer",
+    );
   }
+
 
   async function disconnect() {
     setBusy(true);
