@@ -64,13 +64,89 @@ async function postToken(body: URLSearchParams): Promise<SchwabTokenResponse> {
   return (await res.json()) as SchwabTokenResponse;
 }
 
-export async function exchangeAuthCode(code: string): Promise<SchwabTokenResponse> {
+// ---------- PKCE helpers ----------
+
+function base64url(bytes: Uint8Array): string {
+  let s = "";
+  for (const b of bytes) s += String.fromCharCode(b);
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function randomBase64Url(byteLength: number): string {
+  const buf = new Uint8Array(byteLength);
+  crypto.getRandomValues(buf);
+  return base64url(buf);
+}
+
+async function sha256Base64Url(input: string): Promise<string> {
+  const data = new TextEncoder().encode(input);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return base64url(new Uint8Array(digest));
+}
+
+export async function buildAuthorizeUrl(
+  userId: string,
+): Promise<{ url: string; redirectUri: string }> {
+  const clientId = process.env.SCHWAB_APP_KEY;
+  if (!clientId) throw new Error("SCHWAB_APP_KEY not set");
+  const redirect = redirectUri();
+  const codeVerifier = randomBase64Url(64);
+  const codeChallenge = await sha256Base64Url(codeVerifier);
+  const state = randomBase64Url(24);
+
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { error } = await supabaseAdmin.from("schwab_oauth_state").upsert({
+    user_id: userId,
+    code_verifier: codeVerifier,
+    state,
+    redirect_uri: redirect,
+    created_at: new Date().toISOString(),
+  });
+  if (error) throw error;
+
+  const url = new URL("https://api.schwabapi.com/v1/oauth/authorize");
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("client_id", clientId);
+  url.searchParams.set("redirect_uri", redirect);
+  url.searchParams.set("scope", "readonly");
+  url.searchParams.set("state", state);
+  url.searchParams.set("code_challenge", codeChallenge);
+  url.searchParams.set("code_challenge_method", "S256");
+  return { url: url.toString(), redirectUri: redirect };
+}
+
+export async function exchangeAuthCode(
+  userId: string,
+  code: string,
+  stateFromCallback?: string,
+): Promise<SchwabTokenResponse> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data: row } = await supabaseAdmin
+    .from("schwab_oauth_state")
+    .select("code_verifier, state, redirect_uri")
+    .eq("user_id", userId)
+    .maybeSingle<{ code_verifier: string; state: string; redirect_uri: string }>();
+  if (!row) {
+    throw new Error(
+      'No pending Schwab authorization found. Click "Authorize with Schwab" first, then paste the redirect URL.',
+    );
+  }
+  if (stateFromCallback && stateFromCallback !== row.state) {
+    throw new Error("State mismatch — start a fresh Authorize attempt.");
+  }
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     code,
-    redirect_uri: redirectUri(),
+    redirect_uri: row.redirect_uri,
+    code_verifier: row.code_verifier,
   });
-  return postToken(body);
+  try {
+    const tok = await postToken(body);
+    await supabaseAdmin.from("schwab_oauth_state").delete().eq("user_id", userId);
+    return tok;
+  } catch (e) {
+    throw e;
+  }
 }
 
 async function refreshAccessToken(refreshToken: string): Promise<SchwabTokenResponse> {

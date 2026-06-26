@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      schwab_oauth_state: {
+        Row: {
+          code_verifier: string
+          created_at: string
+          redirect_uri: string
+          state: string
+          user_id: string
+        }
+        Insert: {
+          code_verifier: string
+          created_at?: string
+          redirect_uri: string
+          state: string
+          user_id: string
+        }
+        Update: {
+          code_verifier?: string
+          created_at?: string
+          redirect_uri?: string
+          state?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       schwab_tokens: {
         Row: {
           access_expires_at: string
