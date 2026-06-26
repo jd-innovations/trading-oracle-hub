@@ -130,10 +130,9 @@ function BrokersPage() {
               <>
                 <button
                   onClick={connect}
-                  disabled={busy}
                   className="rounded border border-input bg-background px-3 py-1.5 text-xs font-medium"
                 >
-                  Reconnect
+                  Open portal again
                 </button>
                 <button
                   onClick={disconnect}
@@ -146,28 +145,39 @@ function BrokersPage() {
             ) : (
               <button
                 onClick={connect}
-                disabled={busy}
-                className="rounded bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
+                className="rounded bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
               >
-                {busy ? "..." : "Connect Schwab"}
+                Open Schwab Developer Portal
               </button>
             )}
           </div>
         </div>
-        <p className="mt-3 text-[11px] text-muted-foreground">
-          Schwab refresh tokens last 7 days &mdash; you'll need to reconnect once
-          a week. Access tokens (30 min) auto-refresh. Opens in the top window
-          or a new tab (Schwab blocks iframe embedding).
+        <ol className="mt-3 list-decimal space-y-1 pl-4 text-[11px] text-muted-foreground">
+          <li>Sign in at developer.schwab.com with your developer credentials.</li>
+          <li>
+            Open your app and run its OAuth tool to authorize. Schwab lands on{" "}
+            <code>developer.schwab.com/oauth2-redirect.html?code=...</code>
+          </li>
+          <li>
+            Copy that full URL and paste it into <strong>Paste callback URL manually</strong> below,
+            then click <strong>Exchange &amp; save</strong>.
+          </li>
+        </ol>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          Refresh tokens last 7 days; access tokens (30 min) auto-refresh.
         </p>
       </div>
 
-      <div className="mt-4 rounded-md border border-border bg-card p-4">
+      <div className="mt-4 rounded-md border-2 border-primary/50 bg-card p-4">
         <h2 className="text-base font-semibold">Paste callback URL manually</h2>
+        <p className="mt-1 text-[11px] text-primary">
+          This is how you finish connecting.
+        </p>
         <p className="mt-1 text-[11px] text-muted-foreground">
-          If Schwab doesn't redirect you back into this app, sign in at Schwab
-          and copy the full URL from your browser's address bar after approval
-          (it will contain <code>?code=...</code>). Paste it below — or just
-          the raw code — and we'll exchange it for tokens.
+          After approving in the Schwab developer portal, copy the full URL
+          from your browser's address bar (it contains <code>?code=...</code>).
+          Paste it below — or just the raw code — and we'll exchange it for
+          tokens.
         </p>
         <textarea
           value={manualInput}
