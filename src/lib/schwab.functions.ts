@@ -1,7 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Candle } from "./chart-utils";
 import type { GexLevel } from "./gex.server";
+
 
 
 // ---------- Status / disconnect / OAuth URL ----------
