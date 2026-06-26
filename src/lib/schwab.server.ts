@@ -147,7 +147,11 @@ export async function getSchwabAccessToken(userId: string): Promise<string> {
   // Refresh
   try {
     const tok = await refreshAccessToken(data.refresh_token);
-    await persistTokens(userId, tok);
+    await persistProvidedTokens(userId, {
+      accessToken: tok.access_token,
+      refreshToken: tok.refresh_token ?? data.refresh_token,
+      expiresIn: tok.expires_in,
+    });
     return tok.access_token;
   } catch (e) {
     console.error("[schwab] refresh failed:", e);
