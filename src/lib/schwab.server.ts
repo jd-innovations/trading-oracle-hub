@@ -20,10 +20,18 @@ export class SchwabReauthRequired extends Error {
 
 interface SchwabTokenResponse {
   access_token: string;
-  refresh_token: string;
+  refresh_token?: string;
   expires_in: number; // seconds
   token_type: string;
   scope?: string;
+}
+
+export interface ProvidedSchwabTokens {
+  accessToken: string;
+  refreshToken?: string;
+  expiresIn?: number;
+  accessExpiresAt?: string;
+  refreshExpiresAt?: string;
 }
 
 function basicAuth(): string {
@@ -56,9 +64,7 @@ async function postToken(body: URLSearchParams): Promise<SchwabTokenResponse> {
   return (await res.json()) as SchwabTokenResponse;
 }
 
-export async function exchangeAuthCode(
-  code: string,
-): Promise<SchwabTokenResponse> {
+export async function exchangeAuthCode(code: string): Promise<SchwabTokenResponse> {
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     code,
@@ -67,9 +73,7 @@ export async function exchangeAuthCode(
   return postToken(body);
 }
 
-async function refreshAccessToken(
-  refreshToken: string,
-): Promise<SchwabTokenResponse> {
+async function refreshAccessToken(refreshToken: string): Promise<SchwabTokenResponse> {
   const body = new URLSearchParams({
     grant_type: "refresh_token",
     refresh_token: refreshToken,
@@ -86,22 +90,32 @@ interface StoredTokens {
   refresh_expires_at: string;
 }
 
-export async function persistTokens(
+export async function persistTokens(userId: string, tok: SchwabTokenResponse): Promise<void> {
+  await persistProvidedTokens(userId, {
+    accessToken: tok.access_token,
+    refreshToken: tok.refresh_token,
+    expiresIn: tok.expires_in,
+  });
+}
+
+export async function persistProvidedTokens(
   userId: string,
-  tok: SchwabTokenResponse,
+  tok: ProvidedSchwabTokens,
 ): Promise<void> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const now = Date.now();
-  const access_expires_at = new Date(
-    now + (tok.expires_in - 60) * 1000,
-  ).toISOString();
-  const refresh_expires_at = new Date(
-    now + REFRESH_TTL_SEC * 1000,
-  ).toISOString();
+  const expiresIn = tok.expiresIn && tok.expiresIn > 0 ? tok.expiresIn : ACCESS_TTL_SEC;
+  const access_expires_at =
+    tok.accessExpiresAt ?? new Date(now + Math.max(expiresIn - 60, 60) * 1000).toISOString();
+  const refresh_expires_at =
+    tok.refreshExpiresAt ??
+    new Date(
+      now + (tok.refreshToken ? REFRESH_TTL_SEC : Math.max(expiresIn - 60, 60)) * 1000,
+    ).toISOString();
   const { error } = await supabaseAdmin.from("schwab_tokens").upsert({
     user_id: userId,
-    access_token: tok.access_token,
-    refresh_token: tok.refresh_token,
+    access_token: tok.accessToken,
+    refresh_token: tok.refreshToken ?? "",
     access_expires_at,
     refresh_expires_at,
     updated_at: new Date().toISOString(),
@@ -118,16 +132,20 @@ export async function getSchwabAccessToken(userId: string): Promise<string> {
     .maybeSingle<StoredTokens>();
   if (error || !data) throw new SchwabReauthRequired();
 
-  if (new Date(data.refresh_expires_at).getTime() < Date.now()) {
-    throw new SchwabReauthRequired();
-  }
   if (new Date(data.access_expires_at).getTime() > Date.now() + 30_000) {
     return data.access_token;
+  }
+  if (!data.refresh_token || new Date(data.refresh_expires_at).getTime() < Date.now()) {
+    throw new SchwabReauthRequired();
   }
   // Refresh
   try {
     const tok = await refreshAccessToken(data.refresh_token);
-    await persistTokens(userId, tok);
+    await persistProvidedTokens(userId, {
+      accessToken: tok.access_token,
+      refreshToken: tok.refresh_token ?? data.refresh_token,
+      expiresIn: tok.expires_in,
+    });
     return tok.access_token;
   } catch (e) {
     console.error("[schwab] refresh failed:", e);
@@ -171,9 +189,7 @@ async function schwabGet(
     headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
   });
   if (!res.ok) {
-    console.error(
-      `[schwab] ${path} ${res.status}: ${await res.text().catch(() => "")}`,
-    );
+    console.error(`[schwab] ${path} ${res.status}: ${await res.text().catch(() => "")}`);
     return null;
   }
   return res.json();

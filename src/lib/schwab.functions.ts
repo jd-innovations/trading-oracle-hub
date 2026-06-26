@@ -4,8 +4,6 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Candle } from "./chart-utils";
 import type { GexLevel } from "./gex.server";
 
-
-
 // ---------- Status / disconnect / OAuth URL ----------
 
 export interface SchwabStatus {
@@ -33,57 +31,132 @@ export const disconnectSchwab = createServerFn({ method: "POST" })
 
 export const exchangeSchwabCodeManual = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
-    z.object({ codeOrUrl: z.string().trim().min(1).max(4000) }),
-  )
+  .inputValidator(z.object({ codeOrUrl: z.string().trim().min(1).max(4000) }))
   .handler(async ({ data, context }): Promise<{ ok: true }> => {
-    const { exchangeAuthCode, persistTokens } = await import("./schwab.server");
-    let code = data.codeOrUrl.trim();
-    // If a full URL was pasted, pull ?code= out of it.
-    if (/^https?:\/\//i.test(code)) {
-      try {
-        const u = new URL(code);
-        if (u.hostname.includes("sws-gateway.schwab.com")) {
-          throw new Error(
-            "That is the Schwab brokerage login URL. Open developer.schwab.com, run the developer OAuth tool, then paste the oauth2-redirect URL or raw code.",
-          );
-        }
-        const c = u.searchParams.get("code");
-        if (!c) {
-          throw new Error(
-            "No code found. Paste the developer.schwab.com/oauth2-redirect.html URL that contains ?code=..., or paste the raw code.",
-          );
-        }
-        code = c;
-      } catch (e) {
-        throw new Error(
-          e instanceof Error ? e.message : "Could not parse URL",
-        );
-      }
+    const { exchangeAuthCode, persistTokens, persistProvidedTokens } =
+      await import("./schwab.server");
+    const parsed = parseManualSchwabCredential(data.codeOrUrl);
+    if (parsed.kind === "token") {
+      await persistProvidedTokens(context.userId, parsed.tokens);
+      return { ok: true };
     }
-    // Schwab sometimes URL-encodes the code; decode if needed.
-    try {
-      const decoded = decodeURIComponent(code);
-      if (decoded) code = decoded;
-    } catch {
-      /* ignore */
-    }
-    if (!code || code.includes("sws-gateway.schwab.com")) {
+    if (!parsed.code || parsed.code.includes("sws-gateway.schwab.com")) {
       throw new Error(
         "Paste the developer portal callback URL or raw code, not the Schwab brokerage login URL.",
       );
     }
     try {
-      const tok = await exchangeAuthCode(code);
+      const tok = await exchangeAuthCode(parsed.code);
       await persistTokens(context.userId, tok);
       return { ok: true };
     } catch (e) {
       console.error("[schwab] manual exchange failed", e);
-      throw new Error(
-        e instanceof Error ? e.message : "Token exchange failed",
-      );
+      throw new Error(e instanceof Error ? e.message : "Token exchange failed");
     }
   });
+
+type ManualSchwabCredential =
+  | { kind: "code"; code: string }
+  | {
+      kind: "token";
+      tokens: {
+        accessToken: string;
+        refreshToken?: string;
+        expiresIn?: number;
+        accessExpiresAt?: string;
+        refreshExpiresAt?: string;
+      };
+    };
+
+function parseManualSchwabCredential(input: string): ManualSchwabCredential {
+  const raw = input.trim();
+  if (!raw) throw new Error("Paste the callback URL, raw code, or token JSON from Schwab.");
+  if (raw.includes("sws-gateway.schwab.com")) {
+    throw new Error(
+      "That is the Schwab brokerage login URL. The screenshot you sent is the Swagger authorization modal; it does not contain credentials for this app.",
+    );
+  }
+
+  const tokenFromObject = (obj: Record<string, unknown>): ManualSchwabCredential | null => {
+    const accessToken = stringValue(obj.access_token) ?? stringValue(obj.accessToken);
+    if (!accessToken) return null;
+    return {
+      kind: "token",
+      tokens: {
+        accessToken,
+        refreshToken: stringValue(obj.refresh_token) ?? stringValue(obj.refreshToken),
+        expiresIn: numberValue(obj.expires_in) ?? numberValue(obj.expiresIn),
+        accessExpiresAt: stringValue(obj.access_expires_at) ?? stringValue(obj.accessExpiresAt),
+        refreshExpiresAt: stringValue(obj.refresh_expires_at) ?? stringValue(obj.refreshExpiresAt),
+      },
+    };
+  };
+
+  if (raw.startsWith("{") || raw.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      const obj = Array.isArray(parsed) ? parsed[0] : parsed;
+      if (obj && typeof obj === "object") {
+        const token = tokenFromObject(obj as Record<string, unknown>);
+        if (token) return token;
+      }
+    } catch {
+      throw new Error(
+        "That JSON could not be parsed. Paste token JSON with access_token, or paste a callback URL with ?code=...",
+      );
+    }
+  }
+
+  const parseParams = (value: string): URLSearchParams => {
+    const normalized = value.startsWith("#") || value.startsWith("?") ? value.slice(1) : value;
+    return new URLSearchParams(normalized);
+  };
+
+  if (/^https?:\/\//i.test(raw)) {
+    let url: URL;
+    try {
+      url = new URL(raw);
+    } catch {
+      throw new Error("Could not parse that URL.");
+    }
+    const queryToken = tokenFromObject(Object.fromEntries(url.searchParams));
+    if (queryToken) return queryToken;
+    const hashToken = tokenFromObject(Object.fromEntries(parseParams(url.hash)));
+    if (hashToken) return hashToken;
+    const code = url.searchParams.get("code") ?? parseParams(url.hash).get("code");
+    if (!code) {
+      throw new Error(
+        "No code or access_token found. The 'Available authorizations' modal is only Swagger's status screen; paste the returned oauth2-redirect URL, raw code, or token JSON.",
+      );
+    }
+    return { kind: "code", code: decodeMaybe(code) };
+  }
+
+  if (raw.includes("access_token=") || raw.includes("refresh_token=")) {
+    const token = tokenFromObject(Object.fromEntries(parseParams(raw)));
+    if (token) return token;
+  }
+
+  return { kind: "code", code: decodeMaybe(raw) };
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function numberValue(value: unknown): number | undefined {
+  const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
+function decodeMaybe(value: string): string {
+  try {
+    const decoded = decodeURIComponent(value.trim());
+    return decoded || value.trim();
+  } catch {
+    return value.trim();
+  }
+}
 
 // ---------- SPX history via Schwab ----------
 
@@ -95,45 +168,37 @@ export const getSchwabSpxHistory = createServerFn({ method: "POST" })
       lookbackDays: z.number().int().min(1).max(10),
     }),
   )
-  .handler(
-    async ({
-      data,
-      context,
-    }): Promise<{ candles: Candle[]; error?: string }> => {
-      const {
-        getSchwabAccessToken,
-        fetchSchwabPriceHistory,
-        SchwabReauthRequired,
-      } = await import("./schwab.server");
-      const { resample1mTo } = await import("./tradier.server");
-      try {
-        const token = await getSchwabAccessToken(context.userId);
-        const bars = await fetchSchwabPriceHistory({
-          token,
-          symbol: "$SPX",
-          lookbackDays: data.lookbackDays,
-        });
-        if (!bars.length) return { candles: [], error: "empty" };
-        const minutes =
-          data.timeframe === "1m"
-            ? 1
-            : data.timeframe === "2m"
-              ? 2
-              : data.timeframe === "5m"
-                ? 5
-                : data.timeframe === "15m"
-                  ? 15
-                  : 30;
-        return { candles: resample1mTo(bars, minutes) };
-      } catch (e) {
-        if (e instanceof SchwabReauthRequired) {
-          return { candles: [], error: "reauth_required" };
-        }
-        console.error("[schwab] history failed", e);
-        return { candles: [], error: "fetch_failed" };
+  .handler(async ({ data, context }): Promise<{ candles: Candle[]; error?: string }> => {
+    const { getSchwabAccessToken, fetchSchwabPriceHistory, SchwabReauthRequired } =
+      await import("./schwab.server");
+    const { resample1mTo } = await import("./tradier.server");
+    try {
+      const token = await getSchwabAccessToken(context.userId);
+      const bars = await fetchSchwabPriceHistory({
+        token,
+        symbol: "$SPX",
+        lookbackDays: data.lookbackDays,
+      });
+      if (!bars.length) return { candles: [], error: "empty" };
+      const minutes =
+        data.timeframe === "1m"
+          ? 1
+          : data.timeframe === "2m"
+            ? 2
+            : data.timeframe === "5m"
+              ? 5
+              : data.timeframe === "15m"
+                ? 15
+                : 30;
+      return { candles: resample1mTo(bars, minutes) };
+    } catch (e) {
+      if (e instanceof SchwabReauthRequired) {
+        return { candles: [], error: "reauth_required" };
       }
-    },
-  );
+      console.error("[schwab] history failed", e);
+      return { candles: [], error: "fetch_failed" };
+    }
+  });
 
 // ---------- SPX GEX via Schwab ----------
 
@@ -151,11 +216,8 @@ export const getSchwabSpxGex = createServerFn({ method: "POST" })
       error?: string;
     }> => {
       const now = Math.floor(Date.now() / 1000);
-      const {
-        getSchwabAccessToken,
-        fetchSchwabChain,
-        SchwabReauthRequired,
-      } = await import("./schwab.server");
+      const { getSchwabAccessToken, fetchSchwabChain, SchwabReauthRequired } =
+        await import("./schwab.server");
       const { computeGex } = await import("./gex.server");
       try {
         const token = await getSchwabAccessToken(context.userId);
@@ -163,9 +225,7 @@ export const getSchwabSpxGex = createServerFn({ method: "POST" })
         // the first `expirations` unique dates.
         const today = new Date();
         const fromDate = today.toISOString().slice(0, 10);
-        const to = new Date(today.getTime() + 30 * 24 * 3600 * 1000)
-          .toISOString()
-          .slice(0, 10);
+        const to = new Date(today.getTime() + 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
         const { spot, options } = await fetchSchwabChain({
           token,
           symbol: "$SPX",
@@ -176,18 +236,13 @@ export const getSchwabSpxGex = createServerFn({ method: "POST" })
           return { levels: [], asOf: now, spot, error: "empty" };
         }
         // Filter to nearest N expirations
-        const expDates = [
-          ...new Set(options.map((o) => o.expiration_date ?? "")),
-        ]
+        const expDates = [...new Set(options.map((o) => o.expiration_date ?? ""))]
           .filter(Boolean)
           .sort();
         const keep = new Set(expDates.slice(0, data.expirations));
-        const filtered = options.filter(
-          (o) => o.expiration_date && keep.has(o.expiration_date),
-        );
+        const filtered = options.filter((o) => o.expiration_date && keep.has(o.expiration_date));
         const levels = computeGex(filtered, spot);
-        if (!levels.length)
-          return { levels: [], asOf: now, spot, error: "no_greeks" };
+        if (!levels.length) return { levels: [], asOf: now, spot, error: "no_greeks" };
         return { levels, asOf: now, spot };
       } catch (e) {
         if (e instanceof SchwabReauthRequired) {
@@ -214,9 +269,7 @@ export interface SchwabStreamSessionDTO {
 export const getSchwabStreamSession = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<SchwabStreamSessionDTO | null> => {
-    const { getSchwabAccessToken, getSchwabStreamerSession } = await import(
-      "./schwab.server"
-    );
+    const { getSchwabAccessToken, getSchwabStreamerSession } = await import("./schwab.server");
     try {
       const token = await getSchwabAccessToken(context.userId);
       const sess = await getSchwabStreamerSession({
