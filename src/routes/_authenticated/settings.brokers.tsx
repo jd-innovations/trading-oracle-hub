@@ -29,11 +29,32 @@ function BrokersPage() {
 
   const fetchDisconnect = useServerFn(disconnectSchwab);
   const fetchManualExchange = useServerFn(exchangeSchwabCodeManual);
+  const fetchStartAuth = useServerFn(startSchwabAuth);
   const [status, setStatus] = useState<SchwabStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [manualInput, setManualInput] = useState("");
   const [manualMsg, setManualMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [manualBusy, setManualBusy] = useState(false);
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authMsg, setAuthMsg] = useState<string | null>(null);
+  const [redirectUri, setRedirectUri] = useState<string | null>(null);
+
+  async function startAuth() {
+    setAuthBusy(true);
+    setAuthMsg(null);
+    try {
+      const { url, redirectUri: r } = await fetchStartAuth();
+      setRedirectUri(r);
+      window.open(url, "_blank", "noopener,noreferrer");
+      setAuthMsg(
+        "Opened Schwab authorize page. After approving, copy the developer.schwab.com URL you land on and paste it below.",
+      );
+    } catch (e) {
+      setAuthMsg(e instanceof Error ? e.message : "Failed to start Schwab authorization.");
+    } finally {
+      setAuthBusy(false);
+    }
+  }
 
   async function manualExchange() {
     setManualBusy(true);
