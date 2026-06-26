@@ -70,19 +70,15 @@ type ManualSchwabCredential =
 
 function parseManualSchwabCredential(input: string): ManualSchwabCredential {
   const raw = input.trim();
-  if (!raw)
-    throw new Error("Paste the callback URL, raw code, or token JSON from Schwab.");
+  if (!raw) throw new Error("Paste the callback URL, raw code, or token JSON from Schwab.");
   if (raw.includes("sws-gateway.schwab.com")) {
     throw new Error(
       "That is the Schwab brokerage login URL. The screenshot you sent is the Swagger authorization modal; it does not contain credentials for this app.",
     );
   }
 
-  const tokenFromObject = (
-    obj: Record<string, unknown>,
-  ): ManualSchwabCredential | null => {
-    const accessToken =
-      stringValue(obj.access_token) ?? stringValue(obj.accessToken);
+  const tokenFromObject = (obj: Record<string, unknown>): ManualSchwabCredential | null => {
+    const accessToken = stringValue(obj.access_token) ?? stringValue(obj.accessToken);
     if (!accessToken) return null;
     return {
       kind: "token",
@@ -112,8 +108,7 @@ function parseManualSchwabCredential(input: string): ManualSchwabCredential {
   }
 
   const parseParams = (value: string): URLSearchParams => {
-    const normalized =
-      value.startsWith("#") || value.startsWith("?") ? value.slice(1) : value;
+    const normalized = value.startsWith("#") || value.startsWith("?") ? value.slice(1) : value;
     return new URLSearchParams(normalized);
   };
 
@@ -128,8 +123,7 @@ function parseManualSchwabCredential(input: string): ManualSchwabCredential {
     if (queryToken) return queryToken;
     const hashToken = tokenFromObject(Object.fromEntries(parseParams(url.hash)));
     if (hashToken) return hashToken;
-    const code =
-      url.searchParams.get("code") ?? parseParams(url.hash).get("code");
+    const code = url.searchParams.get("code") ?? parseParams(url.hash).get("code");
     if (!code) {
       throw new Error(
         "No code or access_token found. The 'Available authorizations' modal is only Swagger's status screen; paste the returned oauth2-redirect URL, raw code, or token JSON.",
@@ -151,12 +145,7 @@ function stringValue(value: unknown): string | undefined {
 }
 
 function numberValue(value: unknown): number | undefined {
-  const n =
-    typeof value === "number"
-      ? value
-      : typeof value === "string"
-        ? Number(value)
-        : NaN;
+  const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
   return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
@@ -179,45 +168,37 @@ export const getSchwabSpxHistory = createServerFn({ method: "POST" })
       lookbackDays: z.number().int().min(1).max(10),
     }),
   )
-  .handler(
-    async ({
-      data,
-      context,
-    }): Promise<{ candles: Candle[]; error?: string }> => {
-      const {
-        getSchwabAccessToken,
-        fetchSchwabPriceHistory,
-        SchwabReauthRequired,
-      } = await import("./schwab.server");
-      const { resample1mTo } = await import("./tradier.server");
-      try {
-        const token = await getSchwabAccessToken(context.userId);
-        const bars = await fetchSchwabPriceHistory({
-          token,
-          symbol: "$SPX",
-          lookbackDays: data.lookbackDays,
-        });
-        if (!bars.length) return { candles: [], error: "empty" };
-        const minutes =
-          data.timeframe === "1m"
-            ? 1
-            : data.timeframe === "2m"
-              ? 2
-              : data.timeframe === "5m"
-                ? 5
-                : data.timeframe === "15m"
-                  ? 15
-                  : 30;
-        return { candles: resample1mTo(bars, minutes) };
-      } catch (e) {
-        if (e instanceof SchwabReauthRequired) {
-          return { candles: [], error: "reauth_required" };
-        }
-        console.error("[schwab] history failed", e);
-        return { candles: [], error: "fetch_failed" };
+  .handler(async ({ data, context }): Promise<{ candles: Candle[]; error?: string }> => {
+    const { getSchwabAccessToken, fetchSchwabPriceHistory, SchwabReauthRequired } =
+      await import("./schwab.server");
+    const { resample1mTo } = await import("./tradier.server");
+    try {
+      const token = await getSchwabAccessToken(context.userId);
+      const bars = await fetchSchwabPriceHistory({
+        token,
+        symbol: "$SPX",
+        lookbackDays: data.lookbackDays,
+      });
+      if (!bars.length) return { candles: [], error: "empty" };
+      const minutes =
+        data.timeframe === "1m"
+          ? 1
+          : data.timeframe === "2m"
+            ? 2
+            : data.timeframe === "5m"
+              ? 5
+              : data.timeframe === "15m"
+                ? 15
+                : 30;
+      return { candles: resample1mTo(bars, minutes) };
+    } catch (e) {
+      if (e instanceof SchwabReauthRequired) {
+        return { candles: [], error: "reauth_required" };
       }
-    },
-  );
+      console.error("[schwab] history failed", e);
+      return { candles: [], error: "fetch_failed" };
+    }
+  });
 
 // ---------- SPX GEX via Schwab ----------
 
@@ -235,11 +216,8 @@ export const getSchwabSpxGex = createServerFn({ method: "POST" })
       error?: string;
     }> => {
       const now = Math.floor(Date.now() / 1000);
-      const {
-        getSchwabAccessToken,
-        fetchSchwabChain,
-        SchwabReauthRequired,
-      } = await import("./schwab.server");
+      const { getSchwabAccessToken, fetchSchwabChain, SchwabReauthRequired } =
+        await import("./schwab.server");
       const { computeGex } = await import("./gex.server");
       try {
         const token = await getSchwabAccessToken(context.userId);
@@ -247,9 +225,7 @@ export const getSchwabSpxGex = createServerFn({ method: "POST" })
         // the first `expirations` unique dates.
         const today = new Date();
         const fromDate = today.toISOString().slice(0, 10);
-        const to = new Date(today.getTime() + 30 * 24 * 3600 * 1000)
-          .toISOString()
-          .slice(0, 10);
+        const to = new Date(today.getTime() + 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
         const { spot, options } = await fetchSchwabChain({
           token,
           symbol: "$SPX",
