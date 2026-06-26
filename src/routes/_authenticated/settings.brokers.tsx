@@ -25,7 +25,7 @@ function BrokersPage() {
     from: "/_authenticated/settings/brokers",
   });
   const fetchStatus = useServerFn(getSchwabStatus);
-  const fetchAuthUrl = useServerFn(getSchwabAuthorizeUrl);
+  
   const fetchDisconnect = useServerFn(disconnectSchwab);
   const fetchManualExchange = useServerFn(exchangeSchwabCodeManual);
   const [status, setStatus] = useState<SchwabStatus | null>(null);
