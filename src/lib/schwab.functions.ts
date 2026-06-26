@@ -43,8 +43,17 @@ export const exchangeSchwabCodeManual = createServerFn({ method: "POST" })
     if (/^https?:\/\//i.test(code)) {
       try {
         const u = new URL(code);
+        if (u.hostname.includes("sws-gateway.schwab.com")) {
+          throw new Error(
+            "That is the Schwab brokerage login URL. Open developer.schwab.com, run the developer OAuth tool, then paste the oauth2-redirect URL or raw code.",
+          );
+        }
         const c = u.searchParams.get("code");
-        if (!c) throw new Error("No 'code' parameter in URL");
+        if (!c) {
+          throw new Error(
+            "No code found. Paste the developer.schwab.com/oauth2-redirect.html URL that contains ?code=..., or paste the raw code.",
+          );
+        }
         code = c;
       } catch (e) {
         throw new Error(
@@ -58,6 +67,11 @@ export const exchangeSchwabCodeManual = createServerFn({ method: "POST" })
       if (decoded) code = decoded;
     } catch {
       /* ignore */
+    }
+    if (!code || code.includes("sws-gateway.schwab.com")) {
+      throw new Error(
+        "Paste the developer portal callback URL or raw code, not the Schwab brokerage login URL.",
+      );
     }
     try {
       const tok = await exchangeAuthCode(code);
