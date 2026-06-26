@@ -177,8 +177,8 @@ function BrokersPage() {
         <p className="mt-1 text-[11px] text-muted-foreground">
           Paste the full developer portal callback URL containing <code>?code=...</code>, paste only
           the raw code, or paste token JSON like{" "}
-          <code>{`{"access_token":"...","refresh_token":"...","expires_in":1800}`}</code>
-          . The authorization URL shown inside Schwab's Swagger modal is not enough.
+          <code>{`{"access_token":"...","refresh_token":"...","expires_in":1800}`}</code>. The
+          authorization URL shown inside Schwab's Swagger modal is not enough.
         </p>
         <textarea
           value={manualInput}

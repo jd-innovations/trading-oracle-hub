@@ -105,12 +105,13 @@ export async function persistProvidedTokens(
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const now = Date.now();
   const expiresIn = tok.expiresIn && tok.expiresIn > 0 ? tok.expiresIn : ACCESS_TTL_SEC;
-  const access_expires_at = tok.accessExpiresAt ?? new Date(
-    now + Math.max(expiresIn - 60, 60) * 1000,
-  ).toISOString();
+  const access_expires_at =
+    tok.accessExpiresAt ?? new Date(now + Math.max(expiresIn - 60, 60) * 1000).toISOString();
   const refresh_expires_at =
     tok.refreshExpiresAt ??
-    new Date(now + (tok.refreshToken ? REFRESH_TTL_SEC : Math.max(expiresIn - 60, 60)) * 1000).toISOString();
+    new Date(
+      now + (tok.refreshToken ? REFRESH_TTL_SEC : Math.max(expiresIn - 60, 60)) * 1000,
+    ).toISOString();
   const { error } = await supabaseAdmin.from("schwab_tokens").upsert({
     user_id: userId,
     access_token: tok.accessToken,
