@@ -64,9 +64,7 @@ async function postToken(body: URLSearchParams): Promise<SchwabTokenResponse> {
   return (await res.json()) as SchwabTokenResponse;
 }
 
-export async function exchangeAuthCode(
-  code: string,
-): Promise<SchwabTokenResponse> {
+export async function exchangeAuthCode(code: string): Promise<SchwabTokenResponse> {
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     code,
@@ -75,9 +73,7 @@ export async function exchangeAuthCode(
   return postToken(body);
 }
 
-async function refreshAccessToken(
-  refreshToken: string,
-): Promise<SchwabTokenResponse> {
+async function refreshAccessToken(refreshToken: string): Promise<SchwabTokenResponse> {
   const body = new URLSearchParams({
     grant_type: "refresh_token",
     refresh_token: refreshToken,
@@ -94,10 +90,7 @@ interface StoredTokens {
   refresh_expires_at: string;
 }
 
-export async function persistTokens(
-  userId: string,
-  tok: SchwabTokenResponse,
-): Promise<void> {
+export async function persistTokens(userId: string, tok: SchwabTokenResponse): Promise<void> {
   await persistProvidedTokens(userId, {
     accessToken: tok.access_token,
     refreshToken: tok.refresh_token,
@@ -111,18 +104,13 @@ export async function persistProvidedTokens(
 ): Promise<void> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const now = Date.now();
-  const expiresIn =
-    tok.expiresIn && tok.expiresIn > 0 ? tok.expiresIn : ACCESS_TTL_SEC;
-  const access_expires_at =
-    tok.accessExpiresAt ??
-    new Date(now + Math.max(expiresIn - 60, 60) * 1000).toISOString();
+  const expiresIn = tok.expiresIn && tok.expiresIn > 0 ? tok.expiresIn : ACCESS_TTL_SEC;
+  const access_expires_at = tok.accessExpiresAt ?? new Date(
+    now + Math.max(expiresIn - 60, 60) * 1000,
+  ).toISOString();
   const refresh_expires_at =
     tok.refreshExpiresAt ??
-    new Date(
-      now +
-        (tok.refreshToken ? REFRESH_TTL_SEC : Math.max(expiresIn - 60, 60)) *
-          1000,
-    ).toISOString();
+    new Date(now + (tok.refreshToken ? REFRESH_TTL_SEC : Math.max(expiresIn - 60, 60)) * 1000).toISOString();
   const { error } = await supabaseAdmin.from("schwab_tokens").upsert({
     user_id: userId,
     access_token: tok.accessToken,
@@ -146,10 +134,7 @@ export async function getSchwabAccessToken(userId: string): Promise<string> {
   if (new Date(data.access_expires_at).getTime() > Date.now() + 30_000) {
     return data.access_token;
   }
-  if (
-    !data.refresh_token ||
-    new Date(data.refresh_expires_at).getTime() < Date.now()
-  ) {
+  if (!data.refresh_token || new Date(data.refresh_expires_at).getTime() < Date.now()) {
     throw new SchwabReauthRequired();
   }
   // Refresh
@@ -203,9 +188,7 @@ async function schwabGet(
     headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
   });
   if (!res.ok) {
-    console.error(
-      `[schwab] ${path} ${res.status}: ${await res.text().catch(() => "")}`,
-    );
+    console.error(`[schwab] ${path} ${res.status}: ${await res.text().catch(() => "")}`);
     return null;
   }
   return res.json();

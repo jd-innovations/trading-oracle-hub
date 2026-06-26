@@ -236,18 +236,13 @@ export const getSchwabSpxGex = createServerFn({ method: "POST" })
           return { levels: [], asOf: now, spot, error: "empty" };
         }
         // Filter to nearest N expirations
-        const expDates = [
-          ...new Set(options.map((o) => o.expiration_date ?? "")),
-        ]
+        const expDates = [...new Set(options.map((o) => o.expiration_date ?? ""))]
           .filter(Boolean)
           .sort();
         const keep = new Set(expDates.slice(0, data.expirations));
-        const filtered = options.filter(
-          (o) => o.expiration_date && keep.has(o.expiration_date),
-        );
+        const filtered = options.filter((o) => o.expiration_date && keep.has(o.expiration_date));
         const levels = computeGex(filtered, spot);
-        if (!levels.length)
-          return { levels: [], asOf: now, spot, error: "no_greeks" };
+        if (!levels.length) return { levels: [], asOf: now, spot, error: "no_greeks" };
         return { levels, asOf: now, spot };
       } catch (e) {
         if (e instanceof SchwabReauthRequired) {
@@ -274,9 +269,7 @@ export interface SchwabStreamSessionDTO {
 export const getSchwabStreamSession = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<SchwabStreamSessionDTO | null> => {
-    const { getSchwabAccessToken, getSchwabStreamerSession } = await import(
-      "./schwab.server"
-    );
+    const { getSchwabAccessToken, getSchwabStreamerSession } = await import("./schwab.server");
     try {
       const token = await getSchwabAccessToken(context.userId);
       const sess = await getSchwabStreamerSession({
