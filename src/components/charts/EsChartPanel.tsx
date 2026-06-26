@@ -178,12 +178,13 @@ export function EsChartPanel() {
           {symbol === "SPX" && spxGexIsLive && (
             <span
               className="mono inline-flex items-center gap-1 rounded border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-500"
-              title={`Tradier GEX · ${new Date(spxGexAsOf * 1000).toLocaleTimeString()}`}
+              title={`${spxGexSource} GEX · ${new Date(spxGexAsOf * 1000).toLocaleTimeString()}`}
             >
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              GEX LIVE
+              GEX · {spxGexSource.toUpperCase()}
             </span>
           )}
+
           {activeGex.map((g) => (
             <span
               key={g.label}
