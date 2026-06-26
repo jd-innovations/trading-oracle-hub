@@ -65,7 +65,7 @@ export const exchangeSchwabCodeManual = createServerFn({ method: "POST" })
   });
 
 type ManualSchwabCredential =
-  | { kind: "code"; code: string }
+  | { kind: "code"; code: string; state?: string }
   | {
       kind: "token";
       tokens: {
