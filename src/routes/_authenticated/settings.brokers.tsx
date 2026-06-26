@@ -28,8 +28,32 @@ function BrokersPage() {
   const fetchStatus = useServerFn(getSchwabStatus);
   const fetchAuthUrl = useServerFn(getSchwabAuthorizeUrl);
   const fetchDisconnect = useServerFn(disconnectSchwab);
+  const fetchManualExchange = useServerFn(exchangeSchwabCodeManual);
   const [status, setStatus] = useState<SchwabStatus | null>(null);
   const [busy, setBusy] = useState(false);
+  const [manualInput, setManualInput] = useState("");
+  const [manualMsg, setManualMsg] = useState<
+    { kind: "ok" | "err"; text: string } | null
+  >(null);
+  const [manualBusy, setManualBusy] = useState(false);
+
+  async function manualExchange() {
+    setManualBusy(true);
+    setManualMsg(null);
+    try {
+      await fetchManualExchange({ data: { codeOrUrl: manualInput } });
+      setManualMsg({ kind: "ok", text: "Schwab connected successfully." });
+      setManualInput("");
+      await refresh();
+    } catch (e) {
+      setManualMsg({
+        kind: "err",
+        text: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      setManualBusy(false);
+    }
+  }
 
   async function refresh() {
     try {
