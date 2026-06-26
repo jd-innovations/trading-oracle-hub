@@ -47,7 +47,10 @@ function BrokersPage() {
     } catch (e) {
       setManualMsg({
         kind: "err",
-        text: e instanceof Error ? e.message : String(e),
+        text:
+          e instanceof Error
+            ? e.message
+            : "Paste the developer.schwab.com callback URL or raw code.",
       });
     } finally {
       setManualBusy(false);
@@ -85,8 +88,8 @@ function BrokersPage() {
     <div className="mx-auto max-w-2xl px-4 py-10">
       <h1 className="display text-2xl font-semibold">Brokers</h1>
       <p className="mt-1 text-sm text-muted-foreground">
-        Connect your Schwab account to stream live SPX quotes and pull live
-        option-chain GEX. Falls back to Tradier and then mock data automatically.
+        Connect Schwab data by using the developer portal OAuth tool and pasting
+        the returned code here. This app will not open the Schwab brokerage login.
       </p>
 
       {connected === "schwab" && (
@@ -126,7 +129,7 @@ function BrokersPage() {
                   referrerPolicy="no-referrer"
                   className="rounded border border-input bg-background px-3 py-1.5 text-xs font-medium"
                 >
-                  Open portal again
+                Open developer portal
                 </a>
                 <button
                   onClick={disconnect}
@@ -152,7 +155,7 @@ function BrokersPage() {
         <ol className="mt-3 list-decimal space-y-1 pl-4 text-[11px] text-muted-foreground">
           <li>Sign in at developer.schwab.com with your developer credentials.</li>
           <li>
-            Open your app and run its OAuth tool to authorize. Schwab lands on{" "}
+            Run the developer portal OAuth tool. It should land on{" "}
             <code>developer.schwab.com/oauth2-redirect.html?code=...</code>
           </li>
           <li>
@@ -160,6 +163,10 @@ function BrokersPage() {
             then click <strong>Exchange &amp; save</strong>.
           </li>
         </ol>
+        <p className="mt-2 rounded border border-red-500/30 bg-red-500/10 px-2 py-1.5 text-[11px] text-red-400">
+          Do not paste or use <code>sws-gateway.schwab.com</code>; that is the
+          brokerage login flow, not the developer token callback.
+        </p>
         <p className="mt-2 text-[11px] text-muted-foreground">
           Refresh tokens last 7 days; access tokens (30 min) auto-refresh.
         </p>
@@ -168,18 +175,17 @@ function BrokersPage() {
       <div className="mt-4 rounded-md border-2 border-primary/50 bg-card p-4">
         <h2 className="text-base font-semibold">Paste callback URL manually</h2>
         <p className="mt-1 text-[11px] text-primary">
-          This is how you finish connecting.
+          This is the only connection path used by this app.
         </p>
         <p className="mt-1 text-[11px] text-muted-foreground">
-          After approving in the Schwab developer portal, copy the full URL
-          from your browser's address bar (it contains <code>?code=...</code>).
-          Paste it below — or just the raw code — and we'll exchange it for
-          tokens.
+          Paste the full developer portal callback URL containing{" "}
+          <code>?code=...</code>, or paste only the raw code. Brokerage login URLs
+          are rejected.
         </p>
         <textarea
           value={manualInput}
           onChange={(e) => setManualInput(e.target.value)}
-          placeholder="https://127.0.0.1/?code=...  — or just the code"
+          placeholder="https://developer.schwab.com/oauth2-redirect.html?code=...  — or just the code"
           rows={3}
           className="mt-3 w-full rounded border border-input bg-background px-3 py-2 font-mono text-xs"
         />

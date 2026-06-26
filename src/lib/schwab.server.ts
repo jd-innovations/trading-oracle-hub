@@ -1,7 +1,6 @@
 // Server-only Schwab API helpers. All env reads happen inside functions
 // (per-request injection on the Worker). Token refresh + persistence go
 // through Supabase admin client, loaded lazily inside handlers.
-import { createHmac, timingSafeEqual } from "node:crypto";
 import type { Candle } from "./chart-utils";
 
 const BASE = "https://api.schwabapi.com";
@@ -15,30 +14,6 @@ export class SchwabReauthRequired extends Error {
     super("Schwab reauth required");
     this.name = "SchwabReauthRequired";
   }
-}
-
-// ---------- OAuth state verification for legacy app callback support ----------
-
-function stateSecret(): string {
-  return (
-    process.env.SCHWAB_APP_SECRET ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    "lovable-fallback"
-  );
-}
-
-export function verifyOAuthState(state: string): string | null {
-  const parts = state.split(".");
-  if (parts.length !== 3) return null;
-  const [userId, ts, sig] = parts;
-  const expected = createHmac("sha256", stateSecret())
-    .update(`${userId}.${ts}`)
-    .digest("hex");
-  const a = Buffer.from(sig);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
-  if (Date.now() - Number(ts) > 10 * 60 * 1000) return null; // 10 min window
-  return userId;
 }
 
 // ---------- OAuth token exchange ----------
