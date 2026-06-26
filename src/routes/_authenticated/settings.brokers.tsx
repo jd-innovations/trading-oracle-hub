@@ -6,6 +6,7 @@ import {
   getSchwabStatus,
   disconnectSchwab,
   exchangeSchwabCodeManual,
+  startSchwabAuth,
   type SchwabStatus,
 } from "@/lib/schwab.functions";
 import { supabase } from "@/integrations/supabase/client";
