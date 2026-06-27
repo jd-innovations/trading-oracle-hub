@@ -127,17 +127,20 @@ export function computeZones(
       const windowStart = windowBars[0].time;
       const windowEnd = windowBars[windowBars.length - 1].time;
 
-      // Walk forward in full bar array for the break.
-      let rightEdge = lastBarTime;
+      // Zone extends through the rest of the session (or to last bar in
+      // dataset). We still record whether price broke through both sides
+      // — consumers can dim/style broken zones — but we no longer truncate
+      // the right edge at the break bar.
       let broken = false;
       for (const b of bars) {
         if (b.time <= windowEnd) continue;
         if (b.high > high && b.low < low) {
-          rightEdge = b.time;
           broken = true;
           break;
         }
       }
+      const rightEdge = lastBarTime;
+
 
       zones.push({
         configId: cfg.id,
