@@ -11,7 +11,7 @@ export interface Candle {
  * `minutes` is the target bar size (e.g. 5, 15). Source bars are 2-min.
  */
 export function resampleCandles(bars: Candle[], minutes: number): Candle[] {
-  if (!bars.length || minutes <= 2) return bars;
+  if (!bars.length || minutes <= 1) return bars;
   const bucketSec = minutes * 60;
   const out: Candle[] = [];
   let cur: Candle | null = null;

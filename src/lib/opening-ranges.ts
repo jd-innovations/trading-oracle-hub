@@ -127,17 +127,33 @@ export function computeZones(
       const windowStart = windowBars[0].time;
       const windowEnd = windowBars[windowBars.length - 1].time;
 
-      // Walk forward in full bar array for the break.
-      let rightEdge = lastBarTime;
+      // Zone extends through the rest of the session (or to last bar in
+      // dataset). We still record whether price broke through both sides
+      // — consumers can dim/style broken zones — but we no longer truncate
+      // the right edge at the break bar.
       let broken = false;
       for (const b of bars) {
         if (b.time <= windowEnd) continue;
         if (b.high > high && b.low < low) {
-          rightEdge = b.time;
           broken = true;
           break;
         }
       }
+      // Clip right edge to the end of the matching session on that ET day
+      // (RTH zones end at the RTH close; Globex zones end with the last
+      // non-RTH bar of that ET day). For the live/current day this naturally
+      // ends at the most recent bar.
+      const sessionBars = dayBars.filter((b) => {
+        const m = etMinutesOfDay(b.time);
+        if (cfg.scope === "RTH") return isInRTH(m);
+        if (cfg.scope === "Globex") return !isInRTH(m);
+        return true;
+      });
+      const sessionEnd = sessionBars.length
+        ? sessionBars[sessionBars.length - 1].time
+        : windowEnd;
+      const rightEdge = Math.min(lastBarTime, sessionEnd);
+
 
       zones.push({
         configId: cfg.id,

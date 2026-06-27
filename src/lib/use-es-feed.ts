@@ -2,26 +2,27 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { getSchwabHistory } from "./schwab.functions";
 import { supabase } from "@/integrations/supabase/client";
-import type { Candle } from "./chart-utils";
+import { resampleCandles, type Candle } from "./chart-utils";
 import type { Timeframe } from "@/components/charts/ChartToolbar";
 
-const TF_MAP: Record<Timeframe, "1m" | "2m" | "5m" | "15m" | "30m"> = {
-  "2m": "2m",
-  "5m": "5m",
-  "15m": "15m",
-  "30m": "30m",
-  RTH: "2m",
+const TF_MIN: Record<Timeframe, number> = {
+  "2m": 2,
+  "5m": 5,
+  "15m": 15,
+  "30m": 30,
+  RTH: 2,
 };
 
 export type EsFeedSource = "schwab" | "mock";
 
 /**
  * Live ES futures feed via Schwab /ES front-month.
- * Polls history every 60s — no WebSocket (futures streamer requires
- * additional Schwab entitlement). Falls back silently to mock.
+ * Always fetches 1-minute bars and resamples client-side so that profile
+ * calculations (POC / VAH / VAL / 30m POC) operate on the finest
+ * granularity rather than on already-aggregated candles.
  */
 export function useEsFeed(timeframe: Timeframe, symbol = "/ES") {
-  const [candles, setCandles] = useState<Candle[]>([]);
+  const [base1m, setBase1m] = useState<Candle[]>([]);
   const [isLive, setIsLive] = useState(false);
   const [source, setSource] = useState<EsFeedSource>("mock");
   const fetchHistory = useServerFn(getSchwabHistory);
@@ -41,11 +42,11 @@ export function useEsFeed(timeframe: Timeframe, symbol = "/ES") {
       }
       try {
         const r = await fetchHistory({
-          data: { symbol, timeframe: TF_MAP[timeframe], lookbackDays: 5 },
+          data: { symbol, timeframe: "1m", lookbackDays: 5 },
         });
         if (cancelled) return;
         if (r.candles?.length) {
-          setCandles(r.candles);
+          setBase1m(r.candles);
           setIsLive(true);
           setSource("schwab");
         } else {
@@ -66,7 +67,10 @@ export function useEsFeed(timeframe: Timeframe, symbol = "/ES") {
       cancelled = true;
       if (timer) clearInterval(timer);
     };
-  }, [timeframe, symbol, fetchHistory]);
+  }, [symbol, fetchHistory]);
 
-  return { candles, isLive, source };
+  const minutes = TF_MIN[timeframe];
+  const candles = minutes <= 1 ? base1m : resampleCandles(base1m, minutes);
+
+  return { candles, base1m, isLive, source };
 }
