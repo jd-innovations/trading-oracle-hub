@@ -67,8 +67,11 @@ export const generateDailyPlan = createServerFn({ method: "POST" })
     }
     if (!bars?.length) return { error: "no_bars" };
 
-    const gen = generatePlanFromBars(bars);
+    // Anchor = most recent bar close (live ES price near plan-gen time).
+    const anchor = bars[bars.length - 1].close;
+    const gen = generatePlanFromBars(bars, anchor);
     if (!gen) return { error: "insufficient_session_data" };
+
 
     const row = toRow(gen, symbol === "/ES" ? "ES" : symbol);
     const { data: upserted, error } = await context.supabase
