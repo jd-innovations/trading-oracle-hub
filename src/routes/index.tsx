@@ -157,6 +157,7 @@ function PlanPage() {
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
         <div className="space-y-3 lg:col-span-2">
           <DailyPlanCard plan={plan} />
+          <TargetsExplained plan={plan} />
           <EsChartPanel />
         </div>
         <div className="space-y-3">
