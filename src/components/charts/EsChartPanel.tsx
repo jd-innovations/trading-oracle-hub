@@ -51,18 +51,19 @@ export function EsChartPanel() {
   const { candles: spxLive, isLive: spxIsLive, source: spxSource } = useSpxFeed(timeframe);
   const { levels: spxGexLive, asOf: spxGexAsOf, isLive: spxGexIsLive, source: spxGexSource } =
     useSpxGex(symbol === "SPX" && showGex);
+  const { candles: esLive, isLive: esIsLive, source: esSource } = useEsFeed(timeframe);
 
 
-  // For SPX prefer the live Tradier feed; fall back silently to mock if
-  // the feed is empty (no token / API down / not entitled).
+  // Prefer live feeds; fall back silently to mock if the feed is empty
+  // (no Schwab token / not entitled / API down).
   const source =
     symbol === "ES"
-      ? esCandles
-      : spxLive.length > 0
-        ? spxLive
-        : spxCandles;
-  // Live SPX is already resampled server-side; mock and ES still need it.
-  const useRawSource = symbol === "SPX" && spxLive.length > 0;
+      ? esLive.length > 0 ? esLive : esCandles
+      : spxLive.length > 0 ? spxLive : spxCandles;
+  // Live feeds are already resampled server-side; mock candles still need it.
+  const useRawSource =
+    (symbol === "SPX" && spxLive.length > 0) ||
+    (symbol === "ES" && esLive.length > 0);
 
   const data = useMemo(() => {
     if (useRawSource) return source;
