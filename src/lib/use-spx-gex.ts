@@ -60,6 +60,7 @@ export function useSpxGex(enabled: boolean) {
   return {
     levels: state.levels,
     asOf: state.asOf,
+    spot: state.spot,
     isLive: state.levels.length > 0,
     source,
   };

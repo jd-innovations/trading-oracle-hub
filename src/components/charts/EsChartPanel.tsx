@@ -49,8 +49,13 @@ export function EsChartPanel() {
   const chartRef = useRef<ChartHandle>(null);
 
   const { candles: spxLive, isLive: spxIsLive, source: spxSource } = useSpxFeed(timeframe);
-  const { levels: spxGexLive, asOf: spxGexAsOf, isLive: spxGexIsLive, source: spxGexSource } =
-    useSpxGex(symbol === "SPX" && showGex);
+  const {
+    levels: spxGexLive,
+    asOf: spxGexAsOf,
+    spot: spxGexSpot,
+    isLive: spxGexIsLive,
+    source: spxGexSource,
+  } = useSpxGex(showGex);
   const { candles: esLive, base1m: esBase1m, isLive: esIsLive, source: esSource } = useEsFeed(timeframe);
 
 
@@ -71,10 +76,25 @@ export function EsChartPanel() {
     return resampleCandles(source, TF_MIN[timeframe]);
   }, [timeframe, source, useRawSource]);
 
-  const activeGex = useMemo(
-    () => (symbol === "SPX" && spxGexLive.length > 0 ? spxGexLive : gexLevels),
-    [symbol, spxGexLive],
-  );
+  // SPX → ES basis: ES futures trade at a premium/discount to SPX cash.
+  // basis = lastESClose - spxSpot; project SPX GEX strikes onto ES prices.
+  const esBasis = useMemo(() => {
+    if (symbol !== "ES" || spxGexSpot == null) return 0;
+    const src = esBase1m.length > 0 ? esBase1m : esCandles;
+    if (!src.length) return 0;
+    return src[src.length - 1].close - spxGexSpot;
+  }, [symbol, spxGexSpot, esBase1m]);
+
+  const activeGex = useMemo(() => {
+    if (symbol === "SPX") {
+      return spxGexLive.length > 0 ? spxGexLive : gexLevels;
+    }
+    // ES: project live SPX GEX through basis when available
+    if (spxGexLive.length > 0) {
+      return spxGexLive.map((g) => ({ ...g, price: g.price + esBasis }));
+    }
+    return gexLevels;
+  }, [symbol, spxGexLive, esBasis]);
 
   const lines = useMemo(
     () => (showGex ? [...planLines, ...makeGexLines(activeGex)] : planLines),
@@ -182,13 +202,20 @@ export function EsChartPanel() {
       />
       {showGex && (
         <div className="flex flex-wrap items-center gap-1.5 border-b border-border bg-surface-2/40 px-3 py-1.5">
-          {symbol === "SPX" && spxGexIsLive && (
+          {spxGexIsLive && (
             <span
               className="mono inline-flex items-center gap-1 rounded border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-500"
-              title={`${spxGexSource} GEX · ${new Date(spxGexAsOf * 1000).toLocaleTimeString()}`}
+              title={`${spxGexSource} SPX GEX · ${new Date(spxGexAsOf * 1000).toLocaleTimeString()}${
+                symbol === "ES" ? ` · basis ${esBasis >= 0 ? "+" : ""}${esBasis.toFixed(2)}` : ""
+              }`}
             >
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
               GEX · {spxGexSource.toUpperCase()}
+              {symbol === "ES" && (
+                <span className="ml-1 text-emerald-400/70">
+                  · ES{esBasis >= 0 ? "+" : ""}{esBasis.toFixed(1)}
+                </span>
+              )}
             </span>
           )}
 
