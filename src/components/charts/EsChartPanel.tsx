@@ -89,8 +89,13 @@ export function EsChartPanel() {
 
   const profileLevels = useMemo(() => {
     if (symbol !== "ES") return [];
-    return computeProfileLevels(source, { include30m: timeframe === "30m" });
-  }, [symbol, source, timeframe]);
+    // Always compute profile levels from the finest-grained bars available
+    // (1-minute live feed, falling back to mock 2m). Computing them from the
+    // already-resampled display data caused 30m POCs to be derived from
+    // single 30m candles, which produced incorrect prices.
+    const profileBars = esBase1m.length > 0 ? esBase1m : esCandles;
+    return computeProfileLevels(profileBars, { include30m: timeframe === "30m" });
+  }, [symbol, esBase1m, timeframe]);
 
   const handleFit = () => chartRef.current?.fitContent();
 
