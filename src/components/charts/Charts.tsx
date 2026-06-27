@@ -66,10 +66,31 @@ export const EsCandleChart = forwardRef<ChartHandle, {
       const bull = toRgb(styles.getPropertyValue("--bull"), "rgb(34,197,94)");
       const bear = toRgb(styles.getPropertyValue("--bear"), "rgb(239,68,68)");
 
+      const etTimeFmt = new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/New_York",
+        hour12: false,
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+      const etDateTimeFmt = new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/New_York",
+        hour12: false,
+        month: "short",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+      const fmtET = (time: number) => etTimeFmt.format(new Date(time * 1000));
+      const fmtETDateTime = (time: number) =>
+        etDateTimeFmt.format(new Date(time * 1000)) + " ET";
+
       chart = lib.createChart(containerRef.current, {
         width: containerRef.current.clientWidth,
         height,
-        localization: { locale: "en-US" },
+        localization: {
+          locale: "en-US",
+          timeFormatter: fmtETDateTime,
+        },
         layout: {
           background: { type: lib.ColorType.Solid, color: bg },
           textColor: text,
@@ -88,12 +109,7 @@ export const EsCandleChart = forwardRef<ChartHandle, {
           rightOffset: 4,
           barSpacing: 8,
           minBarSpacing: 6,
-          tickMarkFormatter: (time: number) => {
-            const d = new Date(time * 1000);
-            const h = (d.getUTCHours() - 4 + 24) % 24;
-            const m = d.getUTCMinutes();
-            return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-          },
+          tickMarkFormatter: (time: number) => fmtET(time),
         },
         crosshair: { mode: 1 },
       });
