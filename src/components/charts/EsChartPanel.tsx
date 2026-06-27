@@ -202,13 +202,20 @@ export function EsChartPanel() {
       />
       {showGex && (
         <div className="flex flex-wrap items-center gap-1.5 border-b border-border bg-surface-2/40 px-3 py-1.5">
-          {symbol === "SPX" && spxGexIsLive && (
+          {spxGexIsLive && (
             <span
               className="mono inline-flex items-center gap-1 rounded border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-500"
-              title={`${spxGexSource} GEX · ${new Date(spxGexAsOf * 1000).toLocaleTimeString()}`}
+              title={`${spxGexSource} SPX GEX · ${new Date(spxGexAsOf * 1000).toLocaleTimeString()}${
+                symbol === "ES" ? ` · basis ${esBasis >= 0 ? "+" : ""}${esBasis.toFixed(2)}` : ""
+              }`}
             >
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
               GEX · {spxGexSource.toUpperCase()}
+              {symbol === "ES" && (
+                <span className="ml-1 text-emerald-400/70">
+                  · ES{esBasis >= 0 ? "+" : ""}{esBasis.toFixed(1)}
+                </span>
+              )}
             </span>
           )}
 
