@@ -51,7 +51,7 @@ export function EsChartPanel() {
   const { candles: spxLive, isLive: spxIsLive, source: spxSource } = useSpxFeed(timeframe);
   const { levels: spxGexLive, asOf: spxGexAsOf, isLive: spxGexIsLive, source: spxGexSource } =
     useSpxGex(symbol === "SPX" && showGex);
-  const { candles: esLive, isLive: esIsLive, source: esSource } = useEsFeed(timeframe);
+  const { candles: esLive, base1m: esBase1m, isLive: esIsLive, source: esSource } = useEsFeed(timeframe);
 
 
   // Prefer live feeds; fall back silently to mock if the feed is empty
