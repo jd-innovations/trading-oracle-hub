@@ -45,7 +45,10 @@ function BrokersPage() {
     try {
       const { url, redirectUri: r } = await fetchStartAuth();
       setRedirectUri(r);
-      window.open(url, "_blank", "noopener,noreferrer");
+      // Intentionally NO "noopener,noreferrer" — some browsers treat noopener
+      // popups from inside an iframe as third-party contexts and silently
+      // block the session cookie Schwab sets during the OTP step.
+      window.open(url, "_blank");
       setAuthMsg(
         "Opened Schwab authorize page. After approving, copy the developer.schwab.com URL you land on and paste it below.",
       );
@@ -53,6 +56,20 @@ function BrokersPage() {
       setAuthMsg(e instanceof Error ? e.message : "Failed to start Schwab authorization.");
     } finally {
       setAuthBusy(false);
+    }
+  }
+
+  async function copyAuthUrl() {
+    setAuthMsg(null);
+    try {
+      const { url, redirectUri: r } = await fetchStartAuth();
+      setRedirectUri(r);
+      await navigator.clipboard.writeText(url);
+      setAuthMsg(
+        "Authorize URL copied. Paste it into a fresh top-level browser tab (not the preview iframe) and complete login + OTP there.",
+      );
+    } catch (e) {
+      setAuthMsg(e instanceof Error ? e.message : "Failed to copy authorize URL.");
     }
   }
 
