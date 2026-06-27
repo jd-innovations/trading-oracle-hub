@@ -2,13 +2,16 @@
 // for the ES futures contract and emits a structured Daily Plan.
 //
 // Business rules (per user spec):
-//   pivot = prior RTH session POC
-//   T1↑   = prior VAH         T1↓   = prior VAL
-//   T2↑   = prior session High T2↓   = prior session Low
-//   T3↑   = priorHigh + (VAH−VAL)
-//   T3↓   = priorLow  − (VAH−VAL)
-//   bias  = close > VAH → Bullish, close < VAL → Bearish, else Neutral
+//   pivot = closest structural reference from prior RTH profile
+//           ({VAH, POC, VAL}) to the anchor price (current/opening price
+//           at plan-generation time, default = last available bar's close).
+//   Upside targets = remaining structural levels above pivot, sorted asc:
+//           candidates {VAH, POC, VAL, priorHigh}, then extension priorHigh + VA range.
+//   Downside targets = remaining structural levels below pivot, sorted desc:
+//           candidates {VAH, POC, VAL, priorLow}, then extension priorLow − VA range.
+//   bias  = anchor > VAH → Bullish, anchor < VAL → Bearish, else Neutral
 //   naked30mPocs = unvisited 30-minute POCs from the prior RTH session
+
 
 const TICK = 0.25;
 const BRACKET_MIN = 30;
@@ -130,7 +133,7 @@ export interface GeneratedPlan {
   context: string;
 }
 
-export function generatePlanFromBars(bars: Bar[]): GeneratedPlan | null {
+export function generatePlanFromBars(bars: Bar[], anchorPrice?: number): GeneratedPlan | null {
   const sessions = groupRthSessions(bars);
   if (sessions.length < 1) return null;
   const prior = sessions[sessions.length - 1];
@@ -142,7 +145,11 @@ export function generatePlanFromBars(bars: Bar[]): GeneratedPlan | null {
   const priorClose = prior.bars[prior.bars.length - 1].close;
   const vaRange = tpo.vah - tpo.val;
 
-  // Naked 30m POCs: not touched (high>=p && low<=p) by any later bar in the session.
+  // Anchor = latest bar close (closest proxy to 8:30 ET plan time)
+  // unless caller passes an explicit live price.
+  const anchor = anchorPrice ?? bars[bars.length - 1].close;
+
+  // Naked 30m POCs
   const pocs = compute30mPocs(prior.bars);
   const naked: number[] = [];
   for (const p of pocs) {
@@ -152,32 +159,59 @@ export function generatePlanFromBars(bars: Bar[]): GeneratedPlan | null {
   }
   naked.sort((a, b) => a - b);
 
-  const bias: GeneratedPlan["bias"] =
-    priorClose > tpo.vah ? "Bullish" : priorClose < tpo.val ? "Bearish" : "Neutral";
+  // Pivot = closest of {VAH, POC, VAL} to anchor
+  const structural: Array<{ name: "VAH" | "POC" | "VAL"; price: number }> = [
+    { name: "VAH", price: tpo.vah },
+    { name: "POC", price: tpo.poc },
+    { name: "VAL", price: tpo.val },
+  ];
+  const pivotRef = structural.reduce((best, cur) =>
+    Math.abs(cur.price - anchor) < Math.abs(best.price - anchor) ? cur : best,
+  );
+  const pivot = roundTick(pivotRef.price);
 
-  // Next ET date (the plan is for *today*, which is the session after prior).
+  // Build target candidates above/below pivot from structural + prior H/L.
+  const allLevels = [
+    ...structural.filter(s => s.name !== pivotRef.name).map(s => s.price),
+    priorHigh,
+    priorLow,
+  ];
+  const uniq = (xs: number[]) => [...new Set(xs.map(roundTick))];
+  const above = uniq(allLevels.filter(p => p > pivot)).sort((a, b) => a - b);
+  const below = uniq(allLevels.filter(p => p < pivot)).sort((a, b) => b - a);
+
+  const extUp = roundTick(priorHigh + vaRange);
+  const extDn = roundTick(priorLow - vaRange);
+  const pickUp = [...above, extUp].filter((p, i, arr) => arr.indexOf(p) === i);
+  const pickDn = [...below, extDn].filter((p, i, arr) => arr.indexOf(p) === i);
+  const t1Up = pickUp[0] ?? extUp;
+  const t2Up = pickUp[1] ?? extUp;
+  const t3Up = pickUp[2] ?? extUp;
+  const t1Dn = pickDn[0] ?? extDn;
+  const t2Dn = pickDn[1] ?? extDn;
+  const t3Dn = pickDn[2] ?? extDn;
+
+  const bias: GeneratedPlan["bias"] =
+    anchor > tpo.vah ? "Bullish" : anchor < tpo.val ? "Bearish" : "Neutral";
+
   const planDate = new Date().toISOString().slice(0, 10);
 
   const biasNote =
     bias === "Bullish"
-      ? `Prior close ${priorClose.toFixed(2)} accepted above VAH ${tpo.vah.toFixed(2)} — lean long while above pivot.`
+      ? `Anchor ${anchor.toFixed(2)} above prior VAH ${tpo.vah.toFixed(2)} — lean long while holding pivot ${pivot.toFixed(2)} (${pivotRef.name}).`
       : bias === "Bearish"
-        ? `Prior close ${priorClose.toFixed(2)} rejected below VAL ${tpo.val.toFixed(2)} — lean short while below pivot.`
-        : `Prior close ${priorClose.toFixed(2)} settled inside value (${tpo.val.toFixed(2)}–${tpo.vah.toFixed(2)}) — rotational until breakout.`;
+        ? `Anchor ${anchor.toFixed(2)} below prior VAL ${tpo.val.toFixed(2)} — lean short while capped by pivot ${pivot.toFixed(2)} (${pivotRef.name}).`
+        : `Anchor ${anchor.toFixed(2)} inside prior value (${tpo.val.toFixed(2)}–${tpo.vah.toFixed(2)}) — rotational around pivot ${pivot.toFixed(2)} (${pivotRef.name}).`;
   const nakedNote = naked.length
-    ? ` Naked 30m POCs from prior session as magnets: ${naked.slice(0, 4).map(p => p.toFixed(2)).join(", ")}.`
+    ? ` Naked 30m POCs as magnets: ${naked.slice(0, 4).map(p => p.toFixed(2)).join(", ")}.`
     : "";
 
   return {
     planDate,
     bias,
-    pivot: roundTick(tpo.poc),
-    t1Up: roundTick(tpo.vah),
-    t2Up: roundTick(priorHigh),
-    t3Up: roundTick(priorHigh + vaRange),
-    t1Dn: roundTick(tpo.val),
-    t2Dn: roundTick(priorLow),
-    t3Dn: roundTick(priorLow - vaRange),
+    pivot,
+    t1Up, t2Up, t3Up,
+    t1Dn, t2Dn, t3Dn,
     priorHigh: roundTick(priorHigh),
     priorLow: roundTick(priorLow),
     priorClose: roundTick(priorClose),
@@ -188,3 +222,4 @@ export function generatePlanFromBars(bars: Bar[]): GeneratedPlan | null {
     context: biasNote + nakedNote,
   };
 }
+
