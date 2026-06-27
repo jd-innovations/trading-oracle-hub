@@ -211,7 +211,44 @@ export const getSchwabSpxHistory = createServerFn({ method: "POST" })
     }
   });
 
+// ---------- Generic price history via Schwab (works for /ES, etc.) ----------
+
+export const getSchwabHistory = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    z.object({
+      symbol: z.string().min(1).max(16),
+      timeframe: z.enum(["1m", "2m", "5m", "15m", "30m"]),
+      lookbackDays: z.number().int().min(1).max(10),
+    }),
+  )
+  .handler(async ({ data, context }): Promise<{ candles: Candle[]; error?: string }> => {
+    const { getSchwabAccessToken, fetchSchwabPriceHistory, SchwabReauthRequired } =
+      await import("./schwab.server");
+    const { resample1mTo } = await import("./tradier.server");
+    try {
+      const token = await getSchwabAccessToken(context.userId);
+      const bars = await fetchSchwabPriceHistory({
+        token,
+        symbol: data.symbol,
+        lookbackDays: data.lookbackDays,
+      });
+      if (!bars.length) return { candles: [], error: "empty" };
+      const minutes =
+        data.timeframe === "1m" ? 1
+          : data.timeframe === "2m" ? 2
+            : data.timeframe === "5m" ? 5
+              : data.timeframe === "15m" ? 15 : 30;
+      return { candles: resample1mTo(bars, minutes) };
+    } catch (e) {
+      if (e instanceof SchwabReauthRequired) return { candles: [], error: "reauth_required" };
+      console.error("[schwab] history failed", data.symbol, e);
+      return { candles: [], error: "fetch_failed" };
+    }
+  });
+
 // ---------- SPX GEX via Schwab ----------
+
 
 export const getSchwabSpxGex = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])

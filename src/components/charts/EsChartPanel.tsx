@@ -10,6 +10,7 @@ import { computeZones } from "@/lib/opening-ranges";
 import { computeProfileLevels } from "@/lib/profile-levels";
 import { useSpxFeed } from "@/lib/use-spx-feed";
 import { useSpxGex } from "@/lib/use-spx-gex";
+import { useEsFeed } from "@/lib/use-es-feed";
 
 const TF_MIN: Record<Timeframe, number> = { "2m": 2, "5m": 5, "15m": 15, "30m": 30, RTH: 2 };
 
@@ -50,18 +51,19 @@ export function EsChartPanel() {
   const { candles: spxLive, isLive: spxIsLive, source: spxSource } = useSpxFeed(timeframe);
   const { levels: spxGexLive, asOf: spxGexAsOf, isLive: spxGexIsLive, source: spxGexSource } =
     useSpxGex(symbol === "SPX" && showGex);
+  const { candles: esLive, isLive: esIsLive, source: esSource } = useEsFeed(timeframe);
 
 
-  // For SPX prefer the live Tradier feed; fall back silently to mock if
-  // the feed is empty (no token / API down / not entitled).
+  // Prefer live feeds; fall back silently to mock if the feed is empty
+  // (no Schwab token / not entitled / API down).
   const source =
     symbol === "ES"
-      ? esCandles
-      : spxLive.length > 0
-        ? spxLive
-        : spxCandles;
-  // Live SPX is already resampled server-side; mock and ES still need it.
-  const useRawSource = symbol === "SPX" && spxLive.length > 0;
+      ? esLive.length > 0 ? esLive : esCandles
+      : spxLive.length > 0 ? spxLive : spxCandles;
+  // Live feeds are already resampled server-side; mock candles still need it.
+  const useRawSource =
+    (symbol === "SPX" && spxLive.length > 0) ||
+    (symbol === "ES" && esLive.length > 0);
 
   const data = useMemo(() => {
     if (useRawSource) return source;
@@ -144,13 +146,13 @@ export function EsChartPanel() {
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <h3 className="label-xs flex items-center gap-2">
           <span>{symbol} · {timeframe} · Daily Plan Levels</span>
-          {symbol === "SPX" && spxIsLive && (
+          {((symbol === "SPX" && spxIsLive) || (symbol === "ES" && esIsLive)) && (
             <span
               className="inline-flex items-center gap-1 text-[10px] text-emerald-500"
-              title={`Live ${spxSource} feed`}
+              title={`Live ${symbol === "SPX" ? spxSource : esSource} feed`}
             >
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              LIVE · {spxSource.toUpperCase()}
+              LIVE · {(symbol === "SPX" ? spxSource : esSource).toUpperCase()}
             </span>
           )}
 
