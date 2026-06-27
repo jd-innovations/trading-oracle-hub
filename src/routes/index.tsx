@@ -182,7 +182,7 @@ function PlanPage() {
         </div>
       </div>
       <div className="mt-3">
-        <PlanResultsCard />
+        <PlanResultsCard authed={authed} />
       </div>
     </AppShell>
   );
