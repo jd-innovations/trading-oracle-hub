@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { generatePlanFromBars, type GeneratedPlan } from "./plan-generator";
+import { computePlanResults, type PlanResultComputed } from "./plan-results";
 
 export interface DailyPlanRow {
   id: string;
