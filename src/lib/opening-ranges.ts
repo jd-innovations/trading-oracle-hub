@@ -139,7 +139,20 @@ export function computeZones(
           break;
         }
       }
-      const rightEdge = lastBarTime;
+      // Clip right edge to the end of the matching session on that ET day
+      // (RTH zones end at the RTH close; Globex zones end with the last
+      // non-RTH bar of that ET day). For the live/current day this naturally
+      // ends at the most recent bar.
+      const sessionBars = dayBars.filter((b) => {
+        const m = etMinutesOfDay(b.time);
+        if (cfg.scope === "RTH") return isInRTH(m);
+        if (cfg.scope === "Globex") return !isInRTH(m);
+        return true;
+      });
+      const sessionEnd = sessionBars.length
+        ? sessionBars[sessionBars.length - 1].time
+        : windowEnd;
+      const rightEdge = Math.min(lastBarTime, sessionEnd);
 
 
       zones.push({
