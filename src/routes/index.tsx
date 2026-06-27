@@ -33,6 +33,12 @@ interface PlanView {
   events?: string;
   source: "live" | "mock";
   naked30m?: number[];
+  priorHigh?: number;
+  priorLow?: number;
+  priorClose?: number;
+  priorPoc?: number;
+  priorVah?: number;
+  priorVal?: number;
 }
 
 function rowToView(r: DailyPlanRow, now: number): PlanView {
@@ -48,6 +54,12 @@ function rowToView(r: DailyPlanRow, now: number): PlanView {
     context: r.context ?? "",
     source: "live",
     naked30m: (r.naked_30m_pocs ?? []).map(Number),
+    priorHigh: r.prior_high != null ? Number(r.prior_high) : undefined,
+    priorLow: r.prior_low != null ? Number(r.prior_low) : undefined,
+    priorClose: r.prior_close != null ? Number(r.prior_close) : undefined,
+    priorPoc: r.prior_poc != null ? Number(r.prior_poc) : undefined,
+    priorVah: r.prior_vah != null ? Number(r.prior_vah) : undefined,
+    priorVal: r.prior_val != null ? Number(r.prior_val) : undefined,
   };
 }
 
