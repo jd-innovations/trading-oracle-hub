@@ -45,7 +45,10 @@ function BrokersPage() {
     try {
       const { url, redirectUri: r } = await fetchStartAuth();
       setRedirectUri(r);
-      window.open(url, "_blank", "noopener,noreferrer");
+      // Intentionally NO "noopener,noreferrer" — some browsers treat noopener
+      // popups from inside an iframe as third-party contexts and silently
+      // block the session cookie Schwab sets during the OTP step.
+      window.open(url, "_blank");
       setAuthMsg(
         "Opened Schwab authorize page. After approving, copy the developer.schwab.com URL you land on and paste it below.",
       );
@@ -53,6 +56,20 @@ function BrokersPage() {
       setAuthMsg(e instanceof Error ? e.message : "Failed to start Schwab authorization.");
     } finally {
       setAuthBusy(false);
+    }
+  }
+
+  async function copyAuthUrl() {
+    setAuthMsg(null);
+    try {
+      const { url, redirectUri: r } = await fetchStartAuth();
+      setRedirectUri(r);
+      await navigator.clipboard.writeText(url);
+      setAuthMsg(
+        "Authorize URL copied. Paste it into a fresh top-level browser tab (not the preview iframe) and complete login + OTP there.",
+      );
+    } catch (e) {
+      setAuthMsg(e instanceof Error ? e.message : "Failed to copy authorize URL.");
     }
   }
 
@@ -148,13 +165,21 @@ function BrokersPage() {
                 Disconnect
               </button>
             ) : (
-              <button
-                onClick={startAuth}
-                disabled={authBusy}
-                className="rounded bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
-              >
-                {authBusy ? "Opening..." : "Authorize with Schwab"}
-              </button>
+              <>
+                <button
+                  onClick={startAuth}
+                  disabled={authBusy}
+                  className="rounded bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50"
+                >
+                  {authBusy ? "Opening..." : "Authorize with Schwab"}
+                </button>
+                <button
+                  onClick={copyAuthUrl}
+                  className="rounded border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted"
+                >
+                  Copy authorize URL
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -179,6 +204,29 @@ function BrokersPage() {
         <p className="mt-2 text-[11px] text-muted-foreground">
           Refresh tokens last 7 days; access tokens (30 min) auto-refresh.
         </p>
+        <details className="mt-3 rounded border border-border/60 bg-muted/30 p-2 text-[11px] text-muted-foreground">
+          <summary className="cursor-pointer font-medium text-foreground">
+            OTP code not advancing the page?
+          </summary>
+          <ul className="mt-2 list-disc space-y-1 pl-4">
+            <li>
+              Use <strong>Copy authorize URL</strong> and paste it into a fresh top-level
+              browser tab — not the Lovable preview iframe. Schwab sets a session cookie
+              during OTP that iframe / popup contexts often drop.
+            </li>
+            <li>
+              Allow cookies for <code>schwab.com</code> and <code>schwabapi.com</code>.
+              Strict tracking-protection / 3rd-party-cookie blocking breaks the OTP step
+              silently.
+            </li>
+            <li>
+              If Schwab asks to <em>trust this device</em>, accept it. Declining loops
+              back to OTP with no error.
+            </li>
+            <li>OTP codes expire in ~5 minutes — request a new code if the page is stale.</li>
+            <li>Try Chrome or Edge if your current browser hangs after submitting the code.</li>
+          </ul>
+        </details>
       </div>
 
       <div className="mt-4 rounded-md border-2 border-primary/50 bg-card p-4">
