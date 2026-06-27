@@ -7,7 +7,8 @@ import { EsChartPanel } from "@/components/charts/EsChartPanel";
 import { TpoProfile } from "@/components/charts/TpoProfile";
 import { dailyPlan as mockPlan, planResult } from "@/lib/mock/data";
 import { fmtPrice, planToText, resultToText } from "@/lib/format";
-import { generateDailyPlan, getLatestPlan, type DailyPlanRow } from "@/lib/plans.functions";
+import { generateDailyPlan, getLatestPlan, computePlanResultsFn, type DailyPlanRow } from "@/lib/plans.functions";
+import type { PlanResultComputed } from "@/lib/plan-results";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/")({
