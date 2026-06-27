@@ -5,6 +5,7 @@ import type { Candle } from "./chart-utils";
 
 const BASE = "https://api.schwabapi.com";
 const TOKEN_URL = `${BASE}/v1/oauth/token`;
+const SCHWAB_DEVELOPER_REDIRECT_URI = "https://developer.schwab.com/oauth2-redirect.html";
 
 const ACCESS_TTL_SEC = 30 * 60; // Schwab access tokens last 30m
 const REFRESH_TTL_SEC = 7 * 24 * 3600; // Schwab refresh tokens last 7d
@@ -43,8 +44,12 @@ function basicAuth(): string {
 
 function redirectUri(): string {
   const u = process.env.SCHWAB_REDIRECT_URI;
-  if (!u) throw new Error("SCHWAB_REDIRECT_URI not set");
-  return u;
+  if (!u) return SCHWAB_DEVELOPER_REDIRECT_URI;
+  const normalized = u.trim().replace(/\/+$/, "");
+  if (normalized === "https://api.schwabapi.com/marketdata/v1") {
+    return SCHWAB_DEVELOPER_REDIRECT_URI;
+  }
+  return u.trim();
 }
 
 async function postToken(body: URLSearchParams): Promise<SchwabTokenResponse> {
@@ -104,15 +109,14 @@ export async function buildAuthorizeUrl(
   });
   if (error) throw error;
 
-  const url = new URL("https://api.schwabapi.com/v1/oauth/authorize");
-  url.searchParams.set("response_type", "code");
-  url.searchParams.set("client_id", clientId);
-  url.searchParams.set("redirect_uri", redirect);
-  url.searchParams.set("scope", "readonly");
-  url.searchParams.set("state", state);
-  url.searchParams.set("code_challenge", codeChallenge);
-  url.searchParams.set("code_challenge_method", "S256");
-  return { url: url.toString(), redirectUri: redirect };
+  const params = new URLSearchParams();
+  params.set("response_type", "code");
+  params.set("client_id", clientId);
+  params.set("redirect_uri", redirect);
+  params.set("scope", "readonly");
+  params.set("code_challenge", codeChallenge);
+  params.set("code_challenge_method", "S256");
+  return { url: `https://api.schwabapi.com/v1/oauth/authorize?${params.toString()}`, redirectUri: redirect };
 }
 
 export async function exchangeAuthCode(
