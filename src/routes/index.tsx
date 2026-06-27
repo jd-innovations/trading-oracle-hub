@@ -33,6 +33,12 @@ interface PlanView {
   events?: string;
   source: "live" | "mock";
   naked30m?: number[];
+  priorHigh?: number;
+  priorLow?: number;
+  priorClose?: number;
+  priorPoc?: number;
+  priorVah?: number;
+  priorVal?: number;
 }
 
 function rowToView(r: DailyPlanRow, now: number): PlanView {
@@ -48,6 +54,12 @@ function rowToView(r: DailyPlanRow, now: number): PlanView {
     context: r.context ?? "",
     source: "live",
     naked30m: (r.naked_30m_pocs ?? []).map(Number),
+    priorHigh: r.prior_high != null ? Number(r.prior_high) : undefined,
+    priorLow: r.prior_low != null ? Number(r.prior_low) : undefined,
+    priorClose: r.prior_close != null ? Number(r.prior_close) : undefined,
+    priorPoc: r.prior_poc != null ? Number(r.prior_poc) : undefined,
+    priorVah: r.prior_vah != null ? Number(r.prior_vah) : undefined,
+    priorVal: r.prior_val != null ? Number(r.prior_val) : undefined,
   };
 }
 
@@ -145,6 +157,7 @@ function PlanPage() {
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
         <div className="space-y-3 lg:col-span-2">
           <DailyPlanCard plan={plan} />
+          <TargetsExplained plan={plan} />
           <EsChartPanel />
         </div>
         <div className="space-y-3">
@@ -294,6 +307,81 @@ Session: H ${fmtPrice(r.high)} / L ${fmtPrice(r.low)} / C ${fmtPrice(r.close)}
 Score: ${r.score}/100
 `}<span className="text-muted-foreground">@everyone</span>
       </pre>
+    </Panel>
+  );
+}
+
+function TargetsExplained({ plan: p }: { plan: PlanView }) {
+  const hasPrior = p.priorHigh != null && p.priorLow != null && p.priorVah != null && p.priorVal != null && p.priorPoc != null;
+  const vaRange = hasPrior ? (p.priorVah! - p.priorVal!) : null;
+  const rows: { label: string; tone: string; price: number; formula: string; value: string }[] = hasPrior ? [
+    { label: "T3↑", tone: "text-bull",  price: p.t3Up,  formula: "prior High + VA range", value: `${p.priorHigh!.toFixed(2)} + ${vaRange!.toFixed(2)}` },
+    { label: "T2↑", tone: "text-bull",  price: p.t2Up,  formula: "prior session High",    value: p.priorHigh!.toFixed(2) },
+    { label: "T1↑", tone: "text-bull",  price: p.t1Up,  formula: "prior VAH (70% value)", value: p.priorVah!.toFixed(2) },
+    { label: "Pivot", tone: "text-pivot", price: p.pivot, formula: "prior RTH POC",       value: p.priorPoc!.toFixed(2) },
+    { label: "T1↓", tone: "text-bear",  price: p.t1Dn,  formula: "prior VAL (70% value)", value: p.priorVal!.toFixed(2) },
+    { label: "T2↓", tone: "text-bear",  price: p.t2Dn,  formula: "prior session Low",     value: p.priorLow!.toFixed(2) },
+    { label: "T3↓", tone: "text-bear",  price: p.t3Dn,  formula: "prior Low − VA range",  value: `${p.priorLow!.toFixed(2)} − ${vaRange!.toFixed(2)}` },
+  ] : [];
+
+  return (
+    <Panel title="How Today's Targets Were Derived">
+      {!hasPrior ? (
+        <p className="text-xs text-muted-foreground">
+          Generate today's plan to see the prior-session levels (POC / VAH / VAL / High / Low) that each target is derived from.
+        </p>
+      ) : (
+        <>
+          <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+            {[
+              { k: "Prior High",  v: p.priorHigh!,  tone: "text-bull"  },
+              { k: "Prior VAH",   v: p.priorVah!,   tone: "text-bull"  },
+              { k: "Prior POC",   v: p.priorPoc!,   tone: "text-pivot" },
+              { k: "Prior VAL",   v: p.priorVal!,   tone: "text-bear"  },
+              { k: "Prior Low",   v: p.priorLow!,   tone: "text-bear"  },
+              { k: "Prior Close", v: p.priorClose!, tone: "text-foreground" },
+            ].map((c) => (
+              <div key={c.k} className="rounded-md border border-border/60 bg-surface-1 px-2 py-1.5">
+                <div className="label-xs">{c.k}</div>
+                <div className={`mono text-sm font-semibold ${c.tone}`}>{fmtPrice(c.v)}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="overflow-x-auto rounded-md border border-border/60">
+            <table className="w-full text-xs">
+              <thead className="bg-surface-2 text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                <tr>
+                  <th className="px-2 py-1.5">Level</th>
+                  <th className="px-2 py-1.5">Price</th>
+                  <th className="px-2 py-1.5">Formula</th>
+                  <th className="px-2 py-1.5">Inputs</th>
+                </tr>
+              </thead>
+              <tbody className="mono">
+                {rows.map((r) => (
+                  <tr key={r.label} className="border-t border-border/60">
+                    <td className={`px-2 py-1.5 font-bold ${r.tone}`}>{r.label}</td>
+                    <td className="px-2 py-1.5 font-semibold">{fmtPrice(r.price)}</td>
+                    <td className="px-2 py-1.5 text-muted-foreground">{r.formula}</td>
+                    <td className="px-2 py-1.5 text-muted-foreground">{r.value}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
+            <span className="font-semibold text-foreground">Bias rule:</span> prior close {p.priorClose!.toFixed(2)} vs
+            value area ({p.priorVal!.toFixed(2)}–{p.priorVah!.toFixed(2)}) →{" "}
+            <span className={p.bias === "Bullish" ? "text-bull" : p.bias === "Bearish" ? "text-bear" : "text-info"}>
+              {p.bias}
+            </span>
+            . T1s mark the edges of yesterday's value, T2s are yesterday's range extremes, and T3s project a full
+            value-area width beyond the prior High/Low as the measured-move extension.
+          </p>
+        </>
+      )}
     </Panel>
   );
 }
