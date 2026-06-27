@@ -7,7 +7,8 @@ import { EsChartPanel } from "@/components/charts/EsChartPanel";
 import { TpoProfile } from "@/components/charts/TpoProfile";
 import { dailyPlan as mockPlan, planResult } from "@/lib/mock/data";
 import { fmtPrice, planToText, resultToText } from "@/lib/format";
-import { generateDailyPlan, getLatestPlan, type DailyPlanRow } from "@/lib/plans.functions";
+import { generateDailyPlan, getLatestPlan, computePlanResultsFn, type DailyPlanRow } from "@/lib/plans.functions";
+import type { PlanResultComputed } from "@/lib/plan-results";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/")({
@@ -181,7 +182,7 @@ function PlanPage() {
         </div>
       </div>
       <div className="mt-3">
-        <PlanResultsCard />
+        <PlanResultsCard authed={authed} />
       </div>
     </AppShell>
   );
@@ -277,15 +278,78 @@ function LevelRail({ plan: p }: { plan: PlanView }) {
   );
 }
 
-function PlanResultsCard() {
-  const r = planResult;
-  const text = resultToText(r);
+function PlanResultsCard({ authed }: { authed: boolean }) {
+  const [live, setLive] = useState<PlanResultComputed | null>(null);
+  const [liveDate, setLiveDate] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const fetchResults = useServerFn(computePlanResultsFn);
+
+  async function compute() {
+    setBusy(true); setErr(null);
+    try {
+      const r = await fetchResults({ data: { symbol: "ES" } });
+      if (r.error) {
+        setErr(
+          r.error === "no_plan" ? "No saved plan to grade yet — generate one first."
+          : r.error === "no_session_bars" ? "No RTH bars for that plan date yet."
+          : r.error === "reauth_required" ? "Schwab session expired — reconnect in Brokers."
+          : r.error === "no_bars" ? "Schwab returned no /ES bars."
+          : "Results computation failed."
+        );
+      } else if (r.results) {
+        setLive(r.results);
+        setLiveDate(r.plan?.plan_date ?? r.results.date);
+      }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Results computation failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const r = live ?? planResult;
+  const isLive = !!live;
+  const date = isLive ? (liveDate ?? r.date) : r.date;
   const mark = (b: boolean) => (b ? "✅" : "❌");
+
+  const resultObj = {
+    date,
+    bias: r.bias,
+    biasHit: r.biasHit,
+    pivot: r.pivot,
+    pivotHeld: r.pivotHeld,
+    ups: r.ups,
+    dns: r.dns,
+    high: r.high, low: r.low, close: r.close,
+    score: r.score,
+  };
+  const text = resultToText(resultObj as Parameters<typeof resultToText>[0]);
+
   return (
     <Panel
-      title={`Plan Results — Previous Session`}
+      title={`Plan Results — ${isLive ? date : "Previous Session"}`}
       right={
         <div className="flex items-center gap-2">
+          <span
+            className={`mono rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+              isLive
+                ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-500"
+                : "border-border bg-surface-2 text-muted-foreground"
+            }`}
+          >
+            {isLive ? "LIVE · SCHWAB" : "MOCK"}
+          </span>
+          {authed && (
+            <button
+              onClick={compute}
+              disabled={busy}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-2 py-1 text-[11px] font-medium hover:bg-muted disabled:opacity-50"
+            >
+              <RefreshCw className={`h-3 w-3 ${busy ? "animate-spin" : ""}`} />
+              {busy ? "Grading..." : "Grade Plan"}
+            </button>
+          )}
           <span className="mono rounded-md border border-border bg-surface-2 px-2 py-0.5 text-xs">
             Score {r.score}/100
           </span>
@@ -293,15 +357,16 @@ function PlanResultsCard() {
         </div>
       }
     >
+      {err && <p className="mb-2 text-[11px] text-bear">{err}</p>}
       <pre className="mono whitespace-pre-wrap text-[12.5px] leading-relaxed">
-{`📊 Daily Plan Results — ${r.date}
+{`📊 Daily Plan Results — ${date}
 
 Bias: ${r.bias} ${mark(r.biasHit)}
 Pivot ${fmtPrice(r.pivot)}: ${r.pivotHeld ? "Held ✅" : "Failed ❌"}
 
-`}<span className="text-bull">{r.ups.map((t, i) => `↑ T${i + 1} ${fmtPrice(t.price)}: ${t.hit ? `✅ Hit ${t.time}` : `❌ Missed`}`).join("\n")}</span>{`
+`}<span className="text-bull">{r.ups.map((t, i) => `↑ T${i + 1} ${fmtPrice(t.price)}: ${t.hit ? `✅ Hit ${t.time ?? ""}` : `❌ Missed`}`).join("\n")}</span>{`
 
-`}<span className="text-bear">{r.dns.map((t, i) => `↓ T${i + 1} ${fmtPrice(t.price)}: ${t.hit ? `✅ Hit ${t.time}` : `❌ Missed`}`).join("\n")}</span>{`
+`}<span className="text-bear">{r.dns.map((t, i) => `↓ T${i + 1} ${fmtPrice(t.price)}: ${t.hit ? `✅ Hit ${t.time ?? ""}` : `❌ Missed`}`).join("\n")}</span>{`
 
 Session: H ${fmtPrice(r.high)} / L ${fmtPrice(r.low)} / C ${fmtPrice(r.close)}
 Score: ${r.score}/100

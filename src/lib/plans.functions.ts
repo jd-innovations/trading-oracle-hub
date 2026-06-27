@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { generatePlanFromBars, type GeneratedPlan } from "./plan-generator";
+import { computePlanResults, type PlanResultComputed } from "./plan-results";
 
 export interface DailyPlanRow {
   id: string;
@@ -115,4 +116,55 @@ export const listPlans = createServerFn({ method: "GET" })
       return { plans: [] };
     }
     return { plans: (rows ?? []) as DailyPlanRow[] };
+  });
+
+/**
+ * Compute results for a given plan_date (or the most recent prior session)
+ * by replaying that day's RTH bars vs the saved plan.
+ */
+export const computePlanResultsFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(z.object({
+    symbol: z.string().default("ES"),
+    planDate: z.string().optional(), // YYYY-MM-DD; defaults to most recent plan
+  }).partial())
+  .handler(async ({ data, context }): Promise<{
+    results?: PlanResultComputed;
+    plan?: DailyPlanRow;
+    error?: string;
+  }> => {
+    const symbol = data?.symbol ?? "ES";
+    let q = context.supabase.from("daily_plans").select("*").eq("symbol", symbol);
+    if (data?.planDate) q = q.eq("plan_date", data.planDate);
+    const { data: rows, error } = await q.order("plan_date", { ascending: false }).limit(1);
+    if (error) { console.error("[results] plan lookup failed", error); return { error: "plan_lookup_failed" }; }
+    const plan = (rows?.[0] as DailyPlanRow | undefined);
+    if (!plan) return { error: "no_plan" };
+
+    const { getSchwabAccessToken, fetchSchwabPriceHistory, SchwabReauthRequired } =
+      await import("./schwab.server");
+    let bars;
+    try {
+      const token = await getSchwabAccessToken(context.userId);
+      bars = await fetchSchwabPriceHistory({
+        token,
+        symbol: symbol === "ES" ? "/ES" : symbol,
+        lookbackDays: 10,
+      });
+    } catch (e) {
+      if (e instanceof SchwabReauthRequired) return { error: "reauth_required", plan };
+      console.error("[results] history fetch failed", e);
+      return { error: "history_failed", plan };
+    }
+    if (!bars?.length) return { error: "no_bars", plan };
+
+    const results = computePlanResults({
+      date: plan.plan_date,
+      bias: plan.bias,
+      pivot: Number(plan.pivot),
+      t1Up: Number(plan.t1_up), t2Up: Number(plan.t2_up), t3Up: Number(plan.t3_up),
+      t1Dn: Number(plan.t1_dn), t2Dn: Number(plan.t2_dn), t3Dn: Number(plan.t3_dn),
+    }, bars);
+    if (!results) return { error: "no_session_bars", plan };
+    return { results, plan };
   });
