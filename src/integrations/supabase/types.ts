@@ -14,6 +14,90 @@ export type Database = {
   }
   public: {
     Tables: {
+      daily_plans: {
+        Row: {
+          bias: string
+          context: string | null
+          created_at: string
+          id: string
+          naked_30m_pocs: Json
+          pivot: number
+          plan_date: string
+          prior_close: number | null
+          prior_high: number | null
+          prior_low: number | null
+          prior_poc: number | null
+          prior_vah: number | null
+          prior_val: number | null
+          published: boolean
+          published_at: string
+          source: string
+          symbol: string
+          t1_dn: number
+          t1_up: number
+          t2_dn: number
+          t2_up: number
+          t3_dn: number
+          t3_up: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          bias: string
+          context?: string | null
+          created_at?: string
+          id?: string
+          naked_30m_pocs?: Json
+          pivot: number
+          plan_date: string
+          prior_close?: number | null
+          prior_high?: number | null
+          prior_low?: number | null
+          prior_poc?: number | null
+          prior_vah?: number | null
+          prior_val?: number | null
+          published?: boolean
+          published_at?: string
+          source?: string
+          symbol?: string
+          t1_dn: number
+          t1_up: number
+          t2_dn: number
+          t2_up: number
+          t3_dn: number
+          t3_up: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          bias?: string
+          context?: string | null
+          created_at?: string
+          id?: string
+          naked_30m_pocs?: Json
+          pivot?: number
+          plan_date?: string
+          prior_close?: number | null
+          prior_high?: number | null
+          prior_low?: number | null
+          prior_poc?: number | null
+          prior_vah?: number | null
+          prior_val?: number | null
+          published?: boolean
+          published_at?: string
+          source?: string
+          symbol?: string
+          t1_dn?: number
+          t1_up?: number
+          t2_dn?: number
+          t2_up?: number
+          t3_dn?: number
+          t3_up?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       schwab_oauth_state: {
         Row: {
           code_verifier: string
