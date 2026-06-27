@@ -2,13 +2,16 @@
 // for the ES futures contract and emits a structured Daily Plan.
 //
 // Business rules (per user spec):
-//   pivot = prior RTH session POC
-//   T1↑   = prior VAH         T1↓   = prior VAL
-//   T2↑   = prior session High T2↓   = prior session Low
-//   T3↑   = priorHigh + (VAH−VAL)
-//   T3↓   = priorLow  − (VAH−VAL)
-//   bias  = close > VAH → Bullish, close < VAL → Bearish, else Neutral
+//   pivot = closest structural reference from prior RTH profile
+//           ({VAH, POC, VAL}) to the anchor price (current/opening price
+//           at plan-generation time, default = last available bar's close).
+//   Upside targets = remaining structural levels above pivot, sorted asc:
+//           candidates {VAH, POC, VAL, priorHigh}, then extension priorHigh + VA range.
+//   Downside targets = remaining structural levels below pivot, sorted desc:
+//           candidates {VAH, POC, VAL, priorLow}, then extension priorLow − VA range.
+//   bias  = anchor > VAH → Bullish, anchor < VAL → Bearish, else Neutral
 //   naked30mPocs = unvisited 30-minute POCs from the prior RTH session
+
 
 const TICK = 0.25;
 const BRACKET_MIN = 30;
