@@ -5,7 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { AppShell, Panel } from "@/components/layout/AppShell";
 import { EsChartPanel } from "@/components/charts/EsChartPanel";
 import { TpoProfile } from "@/components/charts/TpoProfile";
-import { dailyPlan as mockPlan, planResult } from "@/lib/mock/data";
+import { planResult } from "@/lib/mock/data";
 import { fmtPrice, planToText, resultToText } from "@/lib/format";
 import { generateDailyPlan, getLatestPlan, computePlanResultsFn, type DailyPlanRow } from "@/lib/plans.functions";
 import type { PlanResultComputed } from "@/lib/plan-results";
