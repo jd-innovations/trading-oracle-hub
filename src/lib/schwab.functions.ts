@@ -272,11 +272,12 @@ export const getSchwabSpxGex = createServerFn({ method: "POST" })
       error?: string;
     }> => {
       const now = Math.floor(Date.now() / 1000);
-      const { getSchwabAccessToken, fetchSchwabChain, SchwabReauthRequired } =
+      const { getSchwabAccessToken, getSchwabOwnerUserId, fetchSchwabChain, SchwabReauthRequired } =
         await import("./schwab.server");
       const { computeGex } = await import("./gex.server");
       try {
-        const token = await getSchwabAccessToken(context.userId);
+        const ownerId = await getSchwabOwnerUserId();
+        const token = await getSchwabAccessToken(ownerId);
         // Pick next N expirations: ask Schwab for a 30-day window and pick
         // the first `expirations` unique dates.
         const today = new Date();
