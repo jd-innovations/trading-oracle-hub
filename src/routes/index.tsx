@@ -147,16 +147,14 @@ function PlanPage() {
         <span className="mono rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-500">
           LIVE · SCHWAB /ES
         </span>
-        {authed && (
-          <button
-            onClick={generate}
-            disabled={busy}
-            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-2.5 py-1 text-xs font-medium hover:bg-muted disabled:opacity-50"
-          >
-            <RefreshCw className={`h-3 w-3 ${busy ? "animate-spin" : ""}`} />
-            {busy ? "Generating..." : "Regenerate Plan"}
-          </button>
-        )}
+        <button
+          onClick={generate}
+          disabled={busy}
+          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-2.5 py-1 text-xs font-medium hover:bg-muted disabled:opacity-50"
+        >
+          <RefreshCw className={`h-3 w-3 ${busy ? "animate-spin" : ""}`} />
+          {busy ? "Generating..." : "Regenerate Plan"}
+        </button>
         {msg && <span className="text-[11px] text-muted-foreground">{msg}</span>}
       </div>
 
