@@ -149,15 +149,33 @@ export function generatePlanFromBars(bars: Bar[], anchorPrice?: number): Generat
   // unless caller passes an explicit live price.
   const anchor = anchorPrice ?? bars[bars.length - 1].close;
 
-  // Naked 30m POCs
-  const pocs = compute30mPocs(prior.bars);
+  // Naked 30m POCs — scan the last 25 RTH sessions (or however many we have).
+  // A POC is "naked" if no subsequent bar (in any later session within the
+  // window, up to and including the prior session) has traded through it.
+  const LOOKBACK = 25;
+  const window = sessions.slice(-LOOKBACK);
   const naked: number[] = [];
-  for (const p of pocs) {
-    const later = prior.bars.filter(b => b.time > p.time + BRACKET_MIN * 60);
-    const touched = later.some(b => b.high >= p.price && b.low <= p.price);
-    if (!touched) naked.push(roundTick(p.price));
+  for (let i = 0; i < window.length; i++) {
+    const sess = window[i];
+    const sessEnd = sess.bars[sess.bars.length - 1].time;
+    const pocs = compute30mPocs(sess.bars);
+    // All bars strictly after this session (later sessions in window).
+    const laterBars: Bar[] = [];
+    for (let j = i + 1; j < window.length; j++) laterBars.push(...window[j].bars);
+    for (const p of pocs) {
+      // Touch within the same session after the bracket forms
+      const sameSessionLater = sess.bars.filter(b => b.time > p.time + BRACKET_MIN * 60);
+      const touchedSame = sameSessionLater.some(b => b.high >= p.price && b.low <= p.price);
+      if (touchedSame) continue;
+      // Touched by any later session
+      const touchedLater = laterBars.some(b => b.high >= p.price && b.low <= p.price);
+      if (touchedLater) continue;
+      // Defensive: also exclude POCs touched after their session end by stray bars
+      void sessEnd;
+      naked.push(roundTick(p.price));
+    }
   }
-  naked.sort((a, b) => a - b);
+  const nakedUniq = [...new Set(naked)].sort((a, b) => a - b);
 
   // Pivot = closest of {VAH, POC, VAL} to anchor
   const structural: Array<{ name: "VAH" | "POC" | "VAL"; price: number }> = [
@@ -170,41 +188,50 @@ export function generatePlanFromBars(bars: Bar[], anchorPrice?: number): Generat
   );
   const pivot = roundTick(pivotRef.price);
 
-  // Build target candidates above/below pivot from structural + prior H/L + naked 30m POCs.
-  const allLevels = [
+  // Structural candidate pool (no extensions yet).
+  const structuralPool = [
     ...structural.filter(s => s.name !== pivotRef.name).map(s => s.price),
     priorHigh,
     priorLow,
-    ...naked,
+    ...nakedUniq,
   ];
   const uniq = (xs: number[]) => [...new Set(xs.map(roundTick))];
-  const MIN_GAP = 8; // points — skip targets too close to pivot / previous target
-  const above = uniq(allLevels.filter(p => p > pivot)).sort((a, b) => a - b);
-  const below = uniq(allLevels.filter(p => p < pivot)).sort((a, b) => b - a);
+  const MIN_GAP = 8; // points — minimum spacing between pivot/targets
+  const above = uniq(structuralPool.filter(p => p > pivot)).sort((a, b) => a - b);
+  const below = uniq(structuralPool.filter(p => p < pivot)).sort((a, b) => b - a);
 
-  const extUp = roundTick(priorHigh + vaRange);
-  const extDn = roundTick(priorLow - vaRange);
-
-  function pickTargets(candidates: number[], ext: number, dir: 1 | -1): number[] {
-    const pool = [...candidates, ext].filter((p, i, arr) => arr.indexOf(p) === i);
+  function pickTargets(structuralCandidates: number[], dir: 1 | -1): number[] {
     const out: number[] = [];
     let prev = pivot;
-    for (const p of pool) {
+    // 1) Walk structural candidates first.
+    for (const p of structuralCandidates) {
       if (Math.abs(p - prev) >= MIN_GAP) {
         out.push(p);
         prev = p;
-        if (out.length === 3) break;
+        if (out.length === 3) return out;
       }
     }
+    // 2) Only when structural pool is exhausted, fall back to extensions
+    //    of the prior High/Low using 0.25× VA increments. Step the multiplier
+    //    until the new target is at least MIN_GAP from the previous level.
+    const base = dir === 1 ? priorHigh : priorLow;
+    let mult = 0.25;
     while (out.length < 3) {
-      const last = out[out.length - 1] ?? pivot;
-      out.push(roundTick(last + dir * Math.max(vaRange, MIN_GAP)));
+      const candidate = roundTick(base + dir * vaRange * mult);
+      if ((dir === 1 ? candidate > prev : candidate < prev) && Math.abs(candidate - prev) >= MIN_GAP) {
+        out.push(candidate);
+        prev = candidate;
+        mult += 0.25;
+      } else {
+        mult += 0.25;
+        if (mult > 6) break; // safety
+      }
     }
     return out;
   }
 
-  const [t1Up, t2Up, t3Up] = pickTargets(above, extUp, 1);
-  const [t1Dn, t2Dn, t3Dn] = pickTargets(below, extDn, -1);
+  const [t1Up, t2Up, t3Up] = pickTargets(above, 1);
+  const [t1Dn, t2Dn, t3Dn] = pickTargets(below, -1);
 
   const bias: GeneratedPlan["bias"] =
     anchor > tpo.vah ? "Bullish" : anchor < tpo.val ? "Bearish" : "Neutral";
