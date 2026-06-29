@@ -352,7 +352,7 @@ function PlanResultsCard({ authed }: { authed: boolean }) {
           >
             {isLive ? "LIVE · SCHWAB" : "MOCK"}
           </span>
-          {authed && (
+          {true && (
             <button
               onClick={compute}
               disabled={busy}
