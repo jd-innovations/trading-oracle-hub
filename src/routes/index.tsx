@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Copy, Check, RefreshCw } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { AppShell, Panel } from "@/components/layout/AppShell";
