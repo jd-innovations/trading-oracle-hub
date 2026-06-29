@@ -307,16 +307,21 @@ export async function fetchSchwabPriceHistory(opts: {
   const { token, symbol, lookbackDays } = opts;
   const end = Date.now();
   const start = end - lookbackDays * 24 * 3600 * 1000;
-  const json = (await schwabGet(token, "/marketdata/v1/pricehistory", {
+  // When startDate/endDate are supplied, Schwab ignores `period`, allowing
+  // 1-minute history well beyond the 10-day cap of periodType=day.
+  const params: Record<string, string> = {
     symbol,
     periodType: "day",
-    period: String(Math.min(lookbackDays, 10)),
     frequencyType: "minute",
     frequency: "1",
     startDate: String(start),
     endDate: String(end),
     needExtendedHoursData: "false",
-  })) as { candles?: PriceHistoryCandle[] } | null;
+  };
+  if (lookbackDays <= 10) params.period = String(lookbackDays);
+  const json = (await schwabGet(token, "/marketdata/v1/pricehistory", params)) as
+    | { candles?: PriceHistoryCandle[] }
+    | null;
   const raw = json?.candles ?? [];
   return raw.map((c) => ({
     time: Math.floor(c.datetime / 1000),
