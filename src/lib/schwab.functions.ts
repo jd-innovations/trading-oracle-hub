@@ -261,12 +261,10 @@ export const getSchwabHistory = createServerFn({ method: "POST" })
 
 
 export const getSchwabSpxGex = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .inputValidator(z.object({ expirations: z.number().int().min(1).max(3) }))
   .handler(
     async ({
       data,
-      context,
     }): Promise<{
       levels: GexLevel[];
       asOf: number;
