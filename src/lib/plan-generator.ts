@@ -244,8 +244,8 @@ export function generatePlanFromBars(bars: Bar[], anchorPrice?: number): Generat
       : bias === "Bearish"
         ? `Anchor ${anchor.toFixed(2)} below prior VAL ${tpo.val.toFixed(2)} — lean short while capped by pivot ${pivot.toFixed(2)} (${pivotRef.name}).`
         : `Anchor ${anchor.toFixed(2)} inside prior value (${tpo.val.toFixed(2)}–${tpo.vah.toFixed(2)}) — rotational around pivot ${pivot.toFixed(2)} (${pivotRef.name}).`;
-  const nakedNote = naked.length
-    ? ` Naked 30m POCs as magnets: ${naked.slice(0, 4).map(p => p.toFixed(2)).join(", ")}.`
+  const nakedNote = nakedUniq.length
+    ? ` Naked 30m POCs (last ${LOOKBACK} sess) as magnets: ${nakedUniq.slice(0, 6).map(p => p.toFixed(2)).join(", ")}.`
     : "";
 
   return {
@@ -260,7 +260,7 @@ export function generatePlanFromBars(bars: Bar[], anchorPrice?: number): Generat
     priorPoc: roundTick(tpo.poc),
     priorVah: roundTick(tpo.vah),
     priorVal: roundTick(tpo.val),
-    naked30mPocs: naked,
+    naked30mPocs: nakedUniq,
     context: biasNote + nakedNote,
   };
 }
