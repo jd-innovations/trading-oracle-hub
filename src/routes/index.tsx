@@ -300,7 +300,7 @@ function PlanResultsCard({ authed }: { authed: boolean }) {
   const [err, setErr] = useState<string | null>(null);
   const fetchResults = useServerFn(computePlanResultsFn);
 
-  async function compute() {
+  const compute = useCallback(async () => {
     setBusy(true); setErr(null);
     try {
       const r = await fetchResults({ data: { symbol: "ES" } });
@@ -321,7 +321,12 @@ function PlanResultsCard({ authed }: { authed: boolean }) {
     } finally {
       setBusy(false);
     }
-  }
+  }, [fetchResults]);
+
+  useEffect(() => {
+    if (authed && !live) void compute();
+  }, [authed, live, compute]);
+
 
   const r = live ?? planResult;
   const isLive = !!live;
