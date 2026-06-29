@@ -144,17 +144,23 @@ function PlanPage() {
     }
   }
 
+  if (!plan) {
+    return (
+      <AppShell title="Daily Plan" subtitle="Module 1 · ES Futures">
+        <div className="flex min-h-[200px] items-center justify-center rounded-md border border-border bg-surface-1 p-6 text-sm text-muted-foreground">
+          {!authed ? "Sign in & connect Schwab to load today's plan."
+            : busy ? "Generating today's plan from live /ES bars..."
+            : (msg ?? "Loading...")}
+        </div>
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell title="Daily Plan" subtitle="Module 1 · ES Futures">
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <span
-          className={`mono rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
-            plan.source === "live"
-              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-500"
-              : "border-border bg-surface-2 text-muted-foreground"
-          }`}
-        >
-          {plan.source === "live" ? "LIVE · SCHWAB /ES" : "MOCK DATA"}
+        <span className="mono rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-500">
+          LIVE · SCHWAB /ES
         </span>
         {authed && (
           <button
@@ -163,16 +169,12 @@ function PlanPage() {
             className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-2.5 py-1 text-xs font-medium hover:bg-muted disabled:opacity-50"
           >
             <RefreshCw className={`h-3 w-3 ${busy ? "animate-spin" : ""}`} />
-            {busy ? "Generating..." : "Generate Today's Plan"}
+            {busy ? "Generating..." : "Regenerate Plan"}
           </button>
-        )}
-        {!authed && (
-          <span className="text-[11px] text-muted-foreground">
-            Sign in & connect Schwab to generate live plans.
-          </span>
         )}
         {msg && <span className="text-[11px] text-muted-foreground">{msg}</span>}
       </div>
+
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
         <div className="space-y-3 lg:col-span-2">
