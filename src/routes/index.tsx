@@ -64,19 +64,13 @@ function rowToView(r: DailyPlanRow, now: number): PlanView {
   };
 }
 
-const mockView: PlanView = {
-  symbol: mockPlan.symbol,
-  date: mockPlan.date,
-  bias: mockPlan.bias,
-  biasReason: mockPlan.biasReason,
-  pivot: mockPlan.pivot,
-  t1Up: mockPlan.t1Up, t2Up: mockPlan.t2Up, t3Up: mockPlan.t3Up,
-  t1Dn: mockPlan.t1Dn, t2Dn: mockPlan.t2Dn, t3Dn: mockPlan.t3Dn,
-  now: mockPlan.now,
-  context: mockPlan.context,
-  events: mockPlan.events,
-  source: "mock",
-};
+function errorToMsg(e: string): string {
+  return e === "reauth_required" ? "Schwab session expired — reconnect in Brokers."
+    : e === "no_bars" ? "Schwab returned no /ES bars (check entitlement)."
+    : e === "insufficient_session_data" ? "Not enough RTH data yet — try after 09:30 ET."
+    : "Plan generation failed.";
+}
+
 
 function PlanPage() {
   const [plan, setPlan] = useState<PlanView | null>(null);
