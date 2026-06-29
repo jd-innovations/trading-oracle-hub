@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { getSchwabHistory } from "./schwab.functions";
-import { supabase } from "@/integrations/supabase/client";
+
 import { resampleCandles, type Candle } from "./chart-utils";
 import type { Timeframe } from "@/components/charts/ChartToolbar";
 
@@ -32,14 +32,6 @@ export function useEsFeed(timeframe: Timeframe, symbol = "/ES") {
     let timer: ReturnType<typeof setInterval> | null = null;
 
     const pull = async () => {
-      const { data: s } = await supabase.auth.getSession();
-      if (!s.session) {
-        if (!cancelled) {
-          setIsLive(false);
-          setSource("mock");
-        }
-        return;
-      }
       try {
         const r = await fetchHistory({
           data: { symbol, timeframe: "1m", lookbackDays: 5 },
