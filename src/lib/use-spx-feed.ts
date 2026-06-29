@@ -63,21 +63,18 @@ export function useSpxFeed(timeframe: Timeframe) {
     let cancelled = false;
     const tf: Timeframe = timeframe === "RTH" ? "2m" : timeframe;
     (async () => {
-      // Try Schwab if user is signed in
-      const { data: s } = await supabase.auth.getSession();
-      if (s.session) {
-        try {
-          const r = await fetchSchwabHistory({
-            data: { timeframe: tf, lookbackDays: 5 },
-          });
-          if (!cancelled && r.candles?.length) {
-            setCandles(r.candles);
-            setSource("schwab");
-            return;
-          }
-        } catch {
-          /* fall through */
+      // Schwab is the primary feed (uses the stored connection — no sign-in required).
+      try {
+        const r = await fetchSchwabHistory({
+          data: { timeframe: tf, lookbackDays: 5 },
+        });
+        if (!cancelled && r.candles?.length) {
+          setCandles(r.candles);
+          setSource("schwab");
+          return;
         }
+      } catch {
+        /* fall through to Tradier as a last resort */
       }
       try {
         const r = await fetchTradierHistory({
@@ -98,6 +95,7 @@ export function useSpxFeed(timeframe: Timeframe) {
       cancelled = true;
     };
   }, [timeframe, fetchSchwabHistory, fetchTradierHistory]);
+
 
   // Stream
   useEffect(() => {
@@ -280,12 +278,11 @@ export function useSpxFeed(timeframe: Timeframe) {
 
     const connect = async () => {
       if (cancelled) return;
-      const { data: s } = await supabase.auth.getSession();
-      if (s.session) {
-        if (await connectSchwab()) return;
-      }
+      // Always try Schwab first (uses stored connection — no Supabase session required).
+      if (await connectSchwab()) return;
       await connectTradier();
     };
+
 
     connect();
 
