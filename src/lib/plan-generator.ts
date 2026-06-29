@@ -170,26 +170,41 @@ export function generatePlanFromBars(bars: Bar[], anchorPrice?: number): Generat
   );
   const pivot = roundTick(pivotRef.price);
 
-  // Build target candidates above/below pivot from structural + prior H/L.
+  // Build target candidates above/below pivot from structural + prior H/L + naked 30m POCs.
   const allLevels = [
     ...structural.filter(s => s.name !== pivotRef.name).map(s => s.price),
     priorHigh,
     priorLow,
+    ...naked,
   ];
   const uniq = (xs: number[]) => [...new Set(xs.map(roundTick))];
+  const MIN_GAP = 8; // points — skip targets too close to pivot / previous target
   const above = uniq(allLevels.filter(p => p > pivot)).sort((a, b) => a - b);
   const below = uniq(allLevels.filter(p => p < pivot)).sort((a, b) => b - a);
 
   const extUp = roundTick(priorHigh + vaRange);
   const extDn = roundTick(priorLow - vaRange);
-  const pickUp = [...above, extUp].filter((p, i, arr) => arr.indexOf(p) === i);
-  const pickDn = [...below, extDn].filter((p, i, arr) => arr.indexOf(p) === i);
-  const t1Up = pickUp[0] ?? extUp;
-  const t2Up = pickUp[1] ?? extUp;
-  const t3Up = pickUp[2] ?? extUp;
-  const t1Dn = pickDn[0] ?? extDn;
-  const t2Dn = pickDn[1] ?? extDn;
-  const t3Dn = pickDn[2] ?? extDn;
+
+  function pickTargets(candidates: number[], ext: number, dir: 1 | -1): number[] {
+    const pool = [...candidates, ext].filter((p, i, arr) => arr.indexOf(p) === i);
+    const out: number[] = [];
+    let prev = pivot;
+    for (const p of pool) {
+      if (Math.abs(p - prev) >= MIN_GAP) {
+        out.push(p);
+        prev = p;
+        if (out.length === 3) break;
+      }
+    }
+    while (out.length < 3) {
+      const last = out[out.length - 1] ?? pivot;
+      out.push(roundTick(last + dir * Math.max(vaRange, MIN_GAP)));
+    }
+    return out;
+  }
+
+  const [t1Up, t2Up, t3Up] = pickTargets(above, extUp, 1);
+  const [t1Dn, t2Dn, t3Dn] = pickTargets(below, extDn, -1);
 
   const bias: GeneratedPlan["bias"] =
     anchor > tpo.vah ? "Bullish" : anchor < tpo.val ? "Bearish" : "Neutral";
