@@ -1,6 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { generatePlanFromBars, type GeneratedPlan } from "./plan-generator";
 import { computePlanResults, type PlanResultComputed } from "./plan-results";
 
@@ -47,18 +46,20 @@ function toRow(p: GeneratedPlan, symbol: string) {
 }
 
 export const generateDailyPlan = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .inputValidator(z.object({ symbol: z.string().default("/ES") }).partial())
-  .handler(async ({ data, context }): Promise<{ plan?: DailyPlanRow; error?: string }> => {
+  .handler(async ({ data }): Promise<{ plan?: DailyPlanRow; error?: string }> => {
     const symbol = data?.symbol ?? "/ES";
     const {
       getSchwabAccessToken,
+      getSchwabOwnerUserId,
       fetchSchwabPriceHistory,
       SchwabReauthRequired,
     } = await import("./schwab.server");
+    const ownerId = await getSchwabOwnerUserId();
+    if (!ownerId) return { error: "reauth_required" };
     let bars;
     try {
-      const token = await getSchwabAccessToken(context.userId);
+      const token = await getSchwabAccessToken(ownerId);
       bars = await fetchSchwabPriceHistory({ token, symbol, lookbackDays: 10 });
     } catch (e) {
       if (e instanceof SchwabReauthRequired) return { error: "reauth_required" };
@@ -67,16 +68,15 @@ export const generateDailyPlan = createServerFn({ method: "POST" })
     }
     if (!bars?.length) return { error: "no_bars" };
 
-    // Anchor = most recent bar close (live ES price near plan-gen time).
     const anchor = bars[bars.length - 1].close;
     const gen = generatePlanFromBars(bars, anchor);
     if (!gen) return { error: "insufficient_session_data" };
 
-
     const row = toRow(gen, symbol === "/ES" ? "ES" : symbol);
-    const { data: upserted, error } = await context.supabase
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: upserted, error } = await supabaseAdmin
       .from("daily_plans")
-      .upsert({ ...row, user_id: context.userId }, { onConflict: "user_id,plan_date,symbol" })
+      .upsert({ ...row, user_id: ownerId }, { onConflict: "user_id,plan_date,symbol" })
       .select("*")
       .single();
     if (error) {
@@ -87,11 +87,11 @@ export const generateDailyPlan = createServerFn({ method: "POST" })
   });
 
 export const getLatestPlan = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
   .inputValidator(z.object({ symbol: z.string().default("ES") }).partial())
-  .handler(async ({ data, context }): Promise<{ plan: DailyPlanRow | null }> => {
+  .handler(async ({ data }): Promise<{ plan: DailyPlanRow | null }> => {
     const symbol = data?.symbol ?? "ES";
-    const { data: rows, error } = await context.supabase
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: rows, error } = await supabaseAdmin
       .from("daily_plans")
       .select("*")
       .eq("symbol", symbol)
@@ -105,11 +105,11 @@ export const getLatestPlan = createServerFn({ method: "GET" })
   });
 
 export const listPlans = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
   .inputValidator(z.object({ limit: z.number().int().min(1).max(100).default(30) }).partial())
-  .handler(async ({ data, context }): Promise<{ plans: DailyPlanRow[] }> => {
+  .handler(async ({ data }): Promise<{ plans: DailyPlanRow[] }> => {
     const limit = data?.limit ?? 30;
-    const { data: rows, error } = await context.supabase
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: rows, error } = await supabaseAdmin
       .from("daily_plans")
       .select("*")
       .order("plan_date", { ascending: false })
@@ -121,34 +121,32 @@ export const listPlans = createServerFn({ method: "GET" })
     return { plans: (rows ?? []) as DailyPlanRow[] };
   });
 
-/**
- * Compute results for a given plan_date (or the most recent prior session)
- * by replaying that day's RTH bars vs the saved plan.
- */
 export const computePlanResultsFn = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .inputValidator(z.object({
     symbol: z.string().default("ES"),
-    planDate: z.string().optional(), // YYYY-MM-DD; defaults to most recent plan
+    planDate: z.string().optional(),
   }).partial())
-  .handler(async ({ data, context }): Promise<{
+  .handler(async ({ data }): Promise<{
     results?: PlanResultComputed;
     plan?: DailyPlanRow;
     error?: string;
   }> => {
     const symbol = data?.symbol ?? "ES";
-    let q = context.supabase.from("daily_plans").select("*").eq("symbol", symbol);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    let q = supabaseAdmin.from("daily_plans").select("*").eq("symbol", symbol);
     if (data?.planDate) q = q.eq("plan_date", data.planDate);
     const { data: rows, error } = await q.order("plan_date", { ascending: false }).limit(1);
     if (error) { console.error("[results] plan lookup failed", error); return { error: "plan_lookup_failed" }; }
     const plan = (rows?.[0] as DailyPlanRow | undefined);
     if (!plan) return { error: "no_plan" };
 
-    const { getSchwabAccessToken, fetchSchwabPriceHistory, SchwabReauthRequired } =
+    const { getSchwabAccessToken, getSchwabOwnerUserId, fetchSchwabPriceHistory, SchwabReauthRequired } =
       await import("./schwab.server");
+    const ownerId = await getSchwabOwnerUserId();
+    if (!ownerId) return { error: "reauth_required", plan };
     let bars;
     try {
-      const token = await getSchwabAccessToken(context.userId);
+      const token = await getSchwabAccessToken(ownerId);
       bars = await fetchSchwabPriceHistory({
         token,
         symbol: symbol === "ES" ? "/ES" : symbol,

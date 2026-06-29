@@ -164,6 +164,7 @@ async function refreshAccessToken(refreshToken: string): Promise<SchwabTokenResp
 // ---------- Token persistence ----------
 
 interface StoredTokens {
+  user_id: string;
   access_token: string;
   refresh_token: string;
   access_expires_at: string;
@@ -203,27 +204,33 @@ export async function persistProvidedTokens(
   if (error) throw error;
 }
 
-export async function getSchwabAccessToken(userId: string): Promise<string> {
+export async function getSchwabAccessToken(userId?: string | null): Promise<string> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { data, error } = await supabaseAdmin
-    .from("schwab_tokens")
-    .select("*")
-    .eq("user_id", userId)
-    .maybeSingle<StoredTokens>();
-  if (error || !data) throw new SchwabReauthRequired();
-
-  if (new Date(data.access_expires_at).getTime() > Date.now() + 30_000) {
-    return data.access_token;
+  let row: StoredTokens | null = null;
+  if (userId) {
+    const { data } = await supabaseAdmin
+      .from("schwab_tokens").select("*").eq("user_id", userId).maybeSingle<StoredTokens>();
+    row = data ?? null;
   }
-  if (!data.refresh_token || new Date(data.refresh_expires_at).getTime() < Date.now()) {
+  if (!row) {
+    // Single-trader fallback: use the most recently updated stored token.
+    const { data } = await supabaseAdmin
+      .from("schwab_tokens").select("*").order("updated_at", { ascending: false }).limit(1);
+    row = (data?.[0] as StoredTokens | undefined) ?? null;
+  }
+  if (!row) throw new SchwabReauthRequired();
+
+  if (new Date(row.access_expires_at).getTime() > Date.now() + 30_000) {
+    return row.access_token;
+  }
+  if (!row.refresh_token || new Date(row.refresh_expires_at).getTime() < Date.now()) {
     throw new SchwabReauthRequired();
   }
-  // Refresh
   try {
-    const tok = await refreshAccessToken(data.refresh_token);
-    await persistProvidedTokens(userId, {
+    const tok = await refreshAccessToken(row.refresh_token);
+    await persistProvidedTokens(row.user_id, {
       accessToken: tok.access_token,
-      refreshToken: tok.refresh_token ?? data.refresh_token,
+      refreshToken: tok.refresh_token ?? row.refresh_token,
       expiresIn: tok.expires_in,
     });
     return tok.access_token;
@@ -231,6 +238,14 @@ export async function getSchwabAccessToken(userId: string): Promise<string> {
     console.error("[schwab] refresh failed:", e);
     throw new SchwabReauthRequired();
   }
+}
+
+/** Returns the user_id that owns the active Schwab token, if any. */
+export async function getSchwabOwnerUserId(): Promise<string | null> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data } = await supabaseAdmin
+    .from("schwab_tokens").select("user_id").order("updated_at", { ascending: false }).limit(1);
+  return (data?.[0]?.user_id as string | undefined) ?? null;
 }
 
 export async function deleteSchwabTokens(userId: string): Promise<void> {

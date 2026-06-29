@@ -86,9 +86,7 @@ function PlanPage() {
     let cancelled = false;
     (async () => {
       const { data } = await supabase.auth.getSession();
-      if (cancelled) return;
-      if (!data.session) return;
-      setAuthed(true);
+      if (!cancelled && data.session) setAuthed(true);
       try {
         const r = await fetchLatest({ data: { symbol: "ES" } });
         if (cancelled) return;
@@ -96,7 +94,6 @@ function PlanPage() {
           setPlan(rowToView(r.plan, Number(r.plan.pivot)));
           return;
         }
-        // Auto-generate today's plan if missing/stale
         setBusy(true);
         const g = await fetchGenerate({ data: { symbol: "/ES" } });
         if (!cancelled && g.plan) {
@@ -121,12 +118,7 @@ function PlanPage() {
     try {
       const r = await fetchGenerate({ data: { symbol: "/ES" } });
       if (r.error) {
-        setMsg(
-          r.error === "reauth_required" ? "Schwab session expired — reconnect in Brokers."
-          : r.error === "no_bars" ? "Schwab returned no /ES bars (check entitlement)."
-          : r.error === "insufficient_session_data" ? "Not enough RTH data yet — try after 09:30 ET."
-          : "Plan generation failed."
-        );
+        setMsg(errorToMsg(r.error));
       } else if (r.plan) {
         setPlan(rowToView(r.plan, Number(r.plan.pivot)));
         setMsg(`Plan generated for ${r.plan.plan_date}.`);
@@ -142,13 +134,12 @@ function PlanPage() {
     return (
       <AppShell title="Daily Plan" subtitle="Module 1 · ES Futures">
         <div className="flex min-h-[200px] items-center justify-center rounded-md border border-border bg-surface-1 p-6 text-sm text-muted-foreground">
-          {!authed ? "Sign in & connect Schwab to load today's plan."
-            : busy ? "Generating today's plan from live /ES bars..."
-            : (msg ?? "Loading...")}
+          {busy ? "Generating today's plan from live /ES bars..." : (msg ?? "Loading...")}
         </div>
       </AppShell>
     );
   }
+
 
   return (
     <AppShell title="Daily Plan" subtitle="Module 1 · ES Futures">
@@ -324,8 +315,9 @@ function PlanResultsCard({ authed }: { authed: boolean }) {
   }, [fetchResults]);
 
   useEffect(() => {
-    if (authed && !live) void compute();
-  }, [authed, live, compute]);
+    if (!live) void compute();
+  }, [live, compute]);
+
 
 
   const r = live ?? planResult;
@@ -360,7 +352,7 @@ function PlanResultsCard({ authed }: { authed: boolean }) {
           >
             {isLive ? "LIVE · SCHWAB" : "MOCK"}
           </span>
-          {authed && (
+          {true && (
             <button
               onClick={compute}
               disabled={busy}
