@@ -79,12 +79,14 @@ const mockView: PlanView = {
 };
 
 function PlanPage() {
-  const [plan, setPlan] = useState<PlanView>(mockView);
+  const [plan, setPlan] = useState<PlanView | null>(null);
   const [authed, setAuthed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const fetchLatest = useServerFn(getLatestPlan);
   const fetchGenerate = useServerFn(generateDailyPlan);
+
+  const todayET = new Date(Date.now() - 4 * 3600 * 1000).toISOString().slice(0, 10);
 
   useEffect(() => {
     let cancelled = false;
@@ -95,13 +97,30 @@ function PlanPage() {
       setAuthed(true);
       try {
         const r = await fetchLatest({ data: { symbol: "ES" } });
-        if (!cancelled && r.plan) setPlan(rowToView(r.plan, Number(r.plan.pivot)));
-      } catch {
-        /* keep mock */
+        if (cancelled) return;
+        if (r.plan && r.plan.plan_date === todayET) {
+          setPlan(rowToView(r.plan, Number(r.plan.pivot)));
+          return;
+        }
+        // Auto-generate today's plan if missing/stale
+        setBusy(true);
+        const g = await fetchGenerate({ data: { symbol: "/ES" } });
+        if (!cancelled && g.plan) {
+          setPlan(rowToView(g.plan, Number(g.plan.pivot)));
+          setMsg(`Plan generated for ${g.plan.plan_date}.`);
+        } else if (!cancelled && g.error) {
+          if (r.plan) setPlan(rowToView(r.plan, Number(r.plan.pivot)));
+          setMsg(errorToMsg(g.error));
+        }
+      } catch (e) {
+        if (!cancelled) setMsg(e instanceof Error ? e.message : "Failed to load plan.");
+      } finally {
+        if (!cancelled) setBusy(false);
       }
     })();
     return () => { cancelled = true; };
-  }, [fetchLatest]);
+  }, [fetchLatest, fetchGenerate, todayET]);
+
 
   async function generate() {
     setBusy(true); setMsg(null);
