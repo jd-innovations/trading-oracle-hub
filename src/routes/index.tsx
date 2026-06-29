@@ -1,11 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Copy, Check, RefreshCw } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { AppShell, Panel } from "@/components/layout/AppShell";
 import { EsChartPanel } from "@/components/charts/EsChartPanel";
 import { TpoProfile } from "@/components/charts/TpoProfile";
-import { dailyPlan as mockPlan, planResult } from "@/lib/mock/data";
+import { planResult } from "@/lib/mock/data";
 import { fmtPrice, planToText, resultToText } from "@/lib/format";
 import { generateDailyPlan, getLatestPlan, computePlanResultsFn, type DailyPlanRow } from "@/lib/plans.functions";
 import type { PlanResultComputed } from "@/lib/plan-results";
@@ -64,27 +64,23 @@ function rowToView(r: DailyPlanRow, now: number): PlanView {
   };
 }
 
-const mockView: PlanView = {
-  symbol: mockPlan.symbol,
-  date: mockPlan.date,
-  bias: mockPlan.bias,
-  biasReason: mockPlan.biasReason,
-  pivot: mockPlan.pivot,
-  t1Up: mockPlan.t1Up, t2Up: mockPlan.t2Up, t3Up: mockPlan.t3Up,
-  t1Dn: mockPlan.t1Dn, t2Dn: mockPlan.t2Dn, t3Dn: mockPlan.t3Dn,
-  now: mockPlan.now,
-  context: mockPlan.context,
-  events: mockPlan.events,
-  source: "mock",
-};
+function errorToMsg(e: string): string {
+  return e === "reauth_required" ? "Schwab session expired — reconnect in Brokers."
+    : e === "no_bars" ? "Schwab returned no /ES bars (check entitlement)."
+    : e === "insufficient_session_data" ? "Not enough RTH data yet — try after 09:30 ET."
+    : "Plan generation failed.";
+}
+
 
 function PlanPage() {
-  const [plan, setPlan] = useState<PlanView>(mockView);
+  const [plan, setPlan] = useState<PlanView | null>(null);
   const [authed, setAuthed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const fetchLatest = useServerFn(getLatestPlan);
   const fetchGenerate = useServerFn(generateDailyPlan);
+
+  const todayET = new Date(Date.now() - 4 * 3600 * 1000).toISOString().slice(0, 10);
 
   useEffect(() => {
     let cancelled = false;
@@ -95,13 +91,30 @@ function PlanPage() {
       setAuthed(true);
       try {
         const r = await fetchLatest({ data: { symbol: "ES" } });
-        if (!cancelled && r.plan) setPlan(rowToView(r.plan, Number(r.plan.pivot)));
-      } catch {
-        /* keep mock */
+        if (cancelled) return;
+        if (r.plan && r.plan.plan_date === todayET) {
+          setPlan(rowToView(r.plan, Number(r.plan.pivot)));
+          return;
+        }
+        // Auto-generate today's plan if missing/stale
+        setBusy(true);
+        const g = await fetchGenerate({ data: { symbol: "/ES" } });
+        if (!cancelled && g.plan) {
+          setPlan(rowToView(g.plan, Number(g.plan.pivot)));
+          setMsg(`Plan generated for ${g.plan.plan_date}.`);
+        } else if (!cancelled && g.error) {
+          if (r.plan) setPlan(rowToView(r.plan, Number(r.plan.pivot)));
+          setMsg(errorToMsg(g.error));
+        }
+      } catch (e) {
+        if (!cancelled) setMsg(e instanceof Error ? e.message : "Failed to load plan.");
+      } finally {
+        if (!cancelled) setBusy(false);
       }
     })();
     return () => { cancelled = true; };
-  }, [fetchLatest]);
+  }, [fetchLatest, fetchGenerate, todayET]);
+
 
   async function generate() {
     setBusy(true); setMsg(null);
@@ -125,17 +138,23 @@ function PlanPage() {
     }
   }
 
+  if (!plan) {
+    return (
+      <AppShell title="Daily Plan" subtitle="Module 1 · ES Futures">
+        <div className="flex min-h-[200px] items-center justify-center rounded-md border border-border bg-surface-1 p-6 text-sm text-muted-foreground">
+          {!authed ? "Sign in & connect Schwab to load today's plan."
+            : busy ? "Generating today's plan from live /ES bars..."
+            : (msg ?? "Loading...")}
+        </div>
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell title="Daily Plan" subtitle="Module 1 · ES Futures">
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <span
-          className={`mono rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
-            plan.source === "live"
-              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-500"
-              : "border-border bg-surface-2 text-muted-foreground"
-          }`}
-        >
-          {plan.source === "live" ? "LIVE · SCHWAB /ES" : "MOCK DATA"}
+        <span className="mono rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-500">
+          LIVE · SCHWAB /ES
         </span>
         {authed && (
           <button
@@ -144,16 +163,12 @@ function PlanPage() {
             className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-2.5 py-1 text-xs font-medium hover:bg-muted disabled:opacity-50"
           >
             <RefreshCw className={`h-3 w-3 ${busy ? "animate-spin" : ""}`} />
-            {busy ? "Generating..." : "Generate Today's Plan"}
+            {busy ? "Generating..." : "Regenerate Plan"}
           </button>
-        )}
-        {!authed && (
-          <span className="text-[11px] text-muted-foreground">
-            Sign in & connect Schwab to generate live plans.
-          </span>
         )}
         {msg && <span className="text-[11px] text-muted-foreground">{msg}</span>}
       </div>
+
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
         <div className="space-y-3 lg:col-span-2">
@@ -285,7 +300,7 @@ function PlanResultsCard({ authed }: { authed: boolean }) {
   const [err, setErr] = useState<string | null>(null);
   const fetchResults = useServerFn(computePlanResultsFn);
 
-  async function compute() {
+  const compute = useCallback(async () => {
     setBusy(true); setErr(null);
     try {
       const r = await fetchResults({ data: { symbol: "ES" } });
@@ -306,7 +321,12 @@ function PlanResultsCard({ authed }: { authed: boolean }) {
     } finally {
       setBusy(false);
     }
-  }
+  }, [fetchResults]);
+
+  useEffect(() => {
+    if (authed && !live) void compute();
+  }, [authed, live, compute]);
+
 
   const r = live ?? planResult;
   const isLive = !!live;
