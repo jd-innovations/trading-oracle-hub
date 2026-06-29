@@ -172,19 +172,23 @@ function decodeMaybe(value: string): string {
 // ---------- SPX history via Schwab ----------
 
 export const getSchwabSpxHistory = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .inputValidator(
     z.object({
       timeframe: z.enum(["1m", "2m", "5m", "15m", "30m"]),
       lookbackDays: z.number().int().min(1).max(45),
     }),
   )
-  .handler(async ({ data, context }): Promise<{ candles: Candle[]; error?: string }> => {
-    const { getSchwabAccessToken, fetchSchwabPriceHistory, SchwabReauthRequired } =
-      await import("./schwab.server");
+  .handler(async ({ data }): Promise<{ candles: Candle[]; error?: string }> => {
+    const {
+      getSchwabAccessToken,
+      getSchwabOwnerUserId,
+      fetchSchwabPriceHistory,
+      SchwabReauthRequired,
+    } = await import("./schwab.server");
     const { resample1mTo } = await import("./tradier.server");
     try {
-      const token = await getSchwabAccessToken(context.userId);
+      const ownerId = await getSchwabOwnerUserId();
+      const token = await getSchwabAccessToken(ownerId);
       const bars = await fetchSchwabPriceHistory({
         token,
         symbol: "$SPX",
@@ -211,10 +215,10 @@ export const getSchwabSpxHistory = createServerFn({ method: "POST" })
     }
   });
 
+
 // ---------- Generic price history via Schwab (works for /ES, etc.) ----------
 
 export const getSchwabHistory = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .inputValidator(
     z.object({
       symbol: z.string().min(1).max(16),
@@ -222,12 +226,17 @@ export const getSchwabHistory = createServerFn({ method: "POST" })
       lookbackDays: z.number().int().min(1).max(45),
     }),
   )
-  .handler(async ({ data, context }): Promise<{ candles: Candle[]; error?: string }> => {
-    const { getSchwabAccessToken, fetchSchwabPriceHistory, SchwabReauthRequired } =
-      await import("./schwab.server");
+  .handler(async ({ data }): Promise<{ candles: Candle[]; error?: string }> => {
+    const {
+      getSchwabAccessToken,
+      getSchwabOwnerUserId,
+      fetchSchwabPriceHistory,
+      SchwabReauthRequired,
+    } = await import("./schwab.server");
     const { resample1mTo } = await import("./tradier.server");
     try {
-      const token = await getSchwabAccessToken(context.userId);
+      const ownerId = await getSchwabOwnerUserId();
+      const token = await getSchwabAccessToken(ownerId);
       const bars = await fetchSchwabPriceHistory({
         token,
         symbol: data.symbol,
@@ -246,6 +255,7 @@ export const getSchwabHistory = createServerFn({ method: "POST" })
       return { candles: [], error: "fetch_failed" };
     }
   });
+
 
 // ---------- SPX GEX via Schwab ----------
 
@@ -315,11 +325,12 @@ export interface SchwabStreamSessionDTO {
 }
 
 export const getSchwabStreamSession = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }): Promise<SchwabStreamSessionDTO | null> => {
-    const { getSchwabAccessToken, getSchwabStreamerSession } = await import("./schwab.server");
+  .handler(async (): Promise<SchwabStreamSessionDTO | null> => {
+    const { getSchwabAccessToken, getSchwabOwnerUserId, getSchwabStreamerSession } =
+      await import("./schwab.server");
     try {
-      const token = await getSchwabAccessToken(context.userId);
+      const ownerId = await getSchwabOwnerUserId();
+      const token = await getSchwabAccessToken(ownerId);
       const sess = await getSchwabStreamerSession({
         token,
         symbols: ["$SPX"],
@@ -339,3 +350,4 @@ export const getSchwabStreamSession = createServerFn({ method: "POST" })
       return null;
     }
   });
+
