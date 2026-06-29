@@ -68,9 +68,33 @@ export const generateDailyPlan = createServerFn({ method: "POST" })
     }
     if (!bars?.length) return { error: "no_bars" };
 
-    const anchor = bars[bars.length - 1].close;
+    // Anchor = /ES print at 08:30:00 America/New_York on the plan date.
+    // Falls back to the latest bar's close only if the 08:30 bar is missing
+    // (e.g. plan is being regenerated mid-week before the open).
+    const ET_OFFSET_HOURS = 4; // EDT; sufficient for intraday bar bucketing
+    const todayKey = (() => {
+      const now = new Date();
+      const shifted = new Date(now.getTime() - ET_OFFSET_HOURS * 3600 * 1000);
+      return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, "0")}-${String(shifted.getUTCDate()).padStart(2, "0")}`;
+    })();
+    const find830 = () => {
+      for (const b of bars) {
+        const d = new Date(b.time * 1000);
+        const etH = (d.getUTCHours() - ET_OFFSET_HOURS + 24) % 24;
+        const etM = d.getUTCMinutes();
+        const k = (() => {
+          const s = new Date((b.time - ET_OFFSET_HOURS * 3600) * 1000);
+          return `${s.getUTCFullYear()}-${String(s.getUTCMonth() + 1).padStart(2, "0")}-${String(s.getUTCDate()).padStart(2, "0")}`;
+        })();
+        if (k === todayKey && etH === 8 && etM === 30) return b;
+      }
+      return null;
+    };
+    const eightThirtyBar = find830();
+    const anchor = eightThirtyBar ? eightThirtyBar.open : bars[bars.length - 1].close;
     const gen = generatePlanFromBars(bars, anchor);
     if (!gen) return { error: "insufficient_session_data" };
+
 
     const row = toRow(gen, symbol === "/ES" ? "ES" : symbol);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
