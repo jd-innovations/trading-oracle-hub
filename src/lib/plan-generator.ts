@@ -149,35 +149,70 @@ export function generatePlanFromBars(bars: Bar[], anchorPrice?: number): Generat
   // unless caller passes an explicit live price.
   const anchor = anchorPrice ?? bars[bars.length - 1].close;
 
-  // Naked 30m POCs — scan the last 25 RTH sessions (or however many we have).
-  // A POC is "naked" if no subsequent bar (in any later session within the
-  // window, up to and including the prior session) has traded through it.
+  // Scan the last 25 RTH sessions for (a) naked 30m POCs and
+  // (b) naked structural references (H/L/VAH/POC/VAL). A level is "naked"
+  // if no subsequent bar (later session OR same session after it was set)
+  // has traded through it.
   const LOOKBACK = 25;
   const window = sessions.slice(-LOOKBACK);
-  const naked: number[] = [];
+
+  // Pre-compute later-bar arrays per session index for touch tests.
+  const laterBarsByIdx: Bar[][] = [];
+  for (let i = 0; i < window.length; i++) {
+    const later: Bar[] = [];
+    for (let j = i + 1; j < window.length; j++) later.push(...window[j].bars);
+    laterBarsByIdx.push(later);
+  }
+  const touched = (price: number, sessBars: Bar[], afterTime: number, laterBars: Bar[]) => {
+    if (sessBars.some(b => b.time > afterTime && b.high >= price && b.low <= price)) return true;
+    if (laterBars.some(b => b.high >= price && b.low <= price)) return true;
+    return false;
+  };
+
+  const nakedPocs30m: number[] = [];
+  type StructRef = { price: number; kind: "H" | "L" | "VAH" | "POC" | "VAL"; sessionKey: string };
+  const nakedStructs: StructRef[] = [];
+
   for (let i = 0; i < window.length; i++) {
     const sess = window[i];
+    const laterBars = laterBarsByIdx[i];
     const sessEnd = sess.bars[sess.bars.length - 1].time;
-    const pocs = compute30mPocs(sess.bars);
-    // All bars strictly after this session (later sessions in window).
-    const laterBars: Bar[] = [];
-    for (let j = i + 1; j < window.length; j++) laterBars.push(...window[j].bars);
-    for (const p of pocs) {
-      // Touch within the same session after the bracket forms
-      const sameSessionLater = sess.bars.filter(b => b.time > p.time + BRACKET_MIN * 60);
-      const touchedSame = sameSessionLater.some(b => b.high >= p.price && b.low <= p.price);
-      if (touchedSame) continue;
-      // Touched by any later session
-      const touchedLater = laterBars.some(b => b.high >= p.price && b.low <= p.price);
-      if (touchedLater) continue;
-      // Defensive: also exclude POCs touched after their session end by stray bars
+
+    // 30m POCs
+    for (const p of compute30mPocs(sess.bars)) {
+      if (touched(p.price, sess.bars, p.time + BRACKET_MIN * 60, laterBars)) continue;
+      nakedPocs30m.push(roundTick(p.price));
+    }
+
+    // Session structural levels (H/L only naked vs LATER sessions;
+    // VAH/POC/VAL of a session can only be evaluated after the session closes).
+    const hi = Math.max(...sess.bars.map(b => b.high));
+    const lo = Math.min(...sess.bars.map(b => b.low));
+    if (!laterBars.some(b => b.high >= hi && b.low <= hi)) {
+      nakedStructs.push({ price: roundTick(hi), kind: "H", sessionKey: sess.key });
+    }
+    if (!laterBars.some(b => b.high >= lo && b.low <= lo)) {
+      nakedStructs.push({ price: roundTick(lo), kind: "L", sessionKey: sess.key });
+    }
+    const sessTpo = computeTpo(sess.bars);
+    if (sessTpo) {
+      for (const [kind, price] of [
+        ["VAH", sessTpo.vah],
+        ["POC", sessTpo.poc],
+        ["VAL", sessTpo.val],
+      ] as const) {
+        // VAH/POC/VAL are evaluated only by LATER sessions (level is defined
+        // by the entire session, so same-session intra-touches don't count).
+        if (!laterBars.some(b => b.high >= price && b.low <= price)) {
+          nakedStructs.push({ price: roundTick(price), kind, sessionKey: sess.key });
+        }
+      }
       void sessEnd;
-      naked.push(roundTick(p.price));
     }
   }
-  const nakedUniq = [...new Set(naked)].sort((a, b) => a - b);
+  const nakedUniq = [...new Set(nakedPocs30m)].sort((a, b) => a - b);
 
-  // Pivot = closest of {VAH, POC, VAL} to anchor
+  // Pivot = closest of TODAY's prior-session {VAH, POC, VAL} to anchor.
   const structural: Array<{ name: "VAH" | "POC" | "VAL"; price: number }> = [
     { name: "VAH", price: tpo.vah },
     { name: "POC", price: tpo.poc },
@@ -188,17 +223,20 @@ export function generatePlanFromBars(bars: Bar[], anchorPrice?: number): Generat
   );
   const pivot = roundTick(pivotRef.price);
 
-  // Structural candidate pool (no extensions yet).
+  // Full structural candidate pool — every naked level across the 25-session
+  // window plus today's prior-session refs. Naked 30m POCs included.
   const structuralPool = [
     ...structural.filter(s => s.name !== pivotRef.name).map(s => s.price),
     priorHigh,
     priorLow,
+    ...nakedStructs.map(s => s.price),
     ...nakedUniq,
   ];
   const uniq = (xs: number[]) => [...new Set(xs.map(roundTick))];
   const MIN_GAP = 8; // points — minimum spacing between pivot/targets
   const above = uniq(structuralPool.filter(p => p > pivot)).sort((a, b) => a - b);
   const below = uniq(structuralPool.filter(p => p < pivot)).sort((a, b) => b - a);
+
 
   function pickTargets(structuralCandidates: number[], dir: 1 | -1): number[] {
     const out: number[] = [];
