@@ -315,8 +315,9 @@ function PlanResultsCard({ authed }: { authed: boolean }) {
   }, [fetchResults]);
 
   useEffect(() => {
-    if (authed && !live) void compute();
-  }, [authed, live, compute]);
+    if (!live) void compute();
+  }, [live, compute]);
+
 
 
   const r = live ?? planResult;
