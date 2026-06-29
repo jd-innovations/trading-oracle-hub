@@ -176,7 +176,7 @@ export const getSchwabSpxHistory = createServerFn({ method: "POST" })
   .inputValidator(
     z.object({
       timeframe: z.enum(["1m", "2m", "5m", "15m", "30m"]),
-      lookbackDays: z.number().int().min(1).max(10),
+      lookbackDays: z.number().int().min(1).max(45),
     }),
   )
   .handler(async ({ data, context }): Promise<{ candles: Candle[]; error?: string }> => {
