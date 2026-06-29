@@ -6,7 +6,7 @@ import {
   getSchwabStreamSession,
   type SchwabStreamSessionDTO,
 } from "./schwab.functions";
-import { supabase } from "@/integrations/supabase/client";
+
 import type { Candle } from "./chart-utils";
 import type { Timeframe } from "@/components/charts/ChartToolbar";
 

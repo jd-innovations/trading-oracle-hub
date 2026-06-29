@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { getSpxGex, type GexResult } from "./gex.functions";
 import { getSchwabSpxGex } from "./schwab.functions";
-import { supabase } from "@/integrations/supabase/client";
+
 
 const REFRESH_MS = 60_000;
 
@@ -26,19 +26,18 @@ export function useSpxGex(enabled: boolean) {
     if (!enabled) return;
     let cancelled = false;
     const tick = async () => {
-      const { data: s } = await supabase.auth.getSession();
-      if (s.session) {
-        try {
-          const r = await fetchSchwab({ data: { expirations: 1 } });
-          if (!cancelled && r.levels.length) {
-            setState(r);
-            setSource("schwab");
-            return;
-          }
-        } catch {
-          /* fall through */
+      // Schwab is the primary GEX source (uses stored connection — no sign-in required).
+      try {
+        const r = await fetchSchwab({ data: { expirations: 1 } });
+        if (!cancelled && r.levels.length) {
+          setState(r);
+          setSource("schwab");
+          return;
         }
+      } catch {
+        /* fall through to Tradier */
       }
+
       try {
         const r = await fetchTradier({ data: { expirations: 1 } });
         if (!cancelled) {
