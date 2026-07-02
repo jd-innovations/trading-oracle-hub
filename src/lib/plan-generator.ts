@@ -42,8 +42,8 @@ function isRth(t: number): boolean {
   const m = etMinutesOfDay(t);
   return m >= RTH_START_MIN && m < RTH_END_MIN;
 }
-function roundTick(p: number): number {
-  return Math.round(p / TICK) * TICK;
+function roundTickBy(p: number, tick: number): number {
+  return Math.round(p / tick) * tick;
 }
 
 function groupRthSessions(bars: Bar[]): { key: string; bars: Bar[] }[] {
