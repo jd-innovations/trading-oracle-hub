@@ -48,7 +48,8 @@ function toRow(p: GeneratedPlan, symbol: string) {
 export const generateDailyPlan = createServerFn({ method: "POST" })
   .inputValidator(z.object({ symbol: z.string().default("/ES") }).partial())
   .handler(async ({ data }): Promise<{ plan?: DailyPlanRow; error?: string }> => {
-    const symbol = data?.symbol ?? "/ES";
+    const { getSymbol } = await import("./symbols");
+    const sym = getSymbol(data?.symbol ?? "/ES");
     const {
       getSchwabAccessToken,
       getSchwabOwnerUserId,
@@ -60,7 +61,7 @@ export const generateDailyPlan = createServerFn({ method: "POST" })
     let bars;
     try {
       const token = await getSchwabAccessToken(ownerId);
-      bars = await fetchSchwabPriceHistory({ token, symbol, lookbackDays: 40 });
+      bars = await fetchSchwabPriceHistory({ token, symbol: sym.schwabRoot, lookbackDays: 40 });
     } catch (e) {
       if (e instanceof SchwabReauthRequired) return { error: "reauth_required" };
       console.error("[plan] history fetch failed", e);
