@@ -318,7 +318,7 @@ function LevelRail({ plan: p }: { plan: PlanView }) {
   );
 }
 
-function PlanResultsCard({ authed }: { authed: boolean }) {
+function PlanResultsCard({ authed, symbolId }: { authed: boolean; symbolId: SymbolId }) {
   const [live, setLive] = useState<PlanResultComputed | null>(null);
   const [liveDate, setLiveDate] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
