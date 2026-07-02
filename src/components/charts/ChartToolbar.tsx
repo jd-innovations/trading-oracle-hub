@@ -3,8 +3,8 @@ import { Maximize2, Minimize2, Activity, Scan } from "lucide-react";
 export type Timeframe = "2m" | "5m" | "15m" | "30m" | "RTH";
 export const TIMEFRAMES: Timeframe[] = ["2m", "5m", "15m", "30m", "RTH"];
 
-export type Symbol = "ES" | "SPX";
-export const SYMBOLS: Symbol[] = ["ES", "SPX"];
+export type Symbol = "ES" | "NQ" | "SPX";
+export const SYMBOLS: Symbol[] = ["ES", "NQ", "SPX"];
 
 interface Props {
   timeframe: Timeframe;
