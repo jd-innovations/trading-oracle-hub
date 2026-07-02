@@ -203,7 +203,7 @@ export function generatePlanFromBars(
     if (!laterBars.some(b => b.high >= lo && b.low <= lo)) {
       nakedStructs.push({ price: roundTick(lo), kind: "L", sessionKey: sess.key });
     }
-    const sessTpo = computeTpo(sess.bars);
+    const sessTpo = computeTpo(sess.bars, TICK);
     if (sessTpo) {
       for (const [kind, price] of [
         ["VAH", sessTpo.vah],
