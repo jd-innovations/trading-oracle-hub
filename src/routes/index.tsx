@@ -72,7 +72,15 @@ function errorToMsg(e: string): string {
 }
 
 
+type SymbolId = "ES" | "NQ";
+const SYMBOL_ROOTS: Record<SymbolId, string> = { ES: "/ES", NQ: "/NQ" };
+
 function PlanPage() {
+  const [symbolId, setSymbolId] = useState<SymbolId>(() => {
+    if (typeof window === "undefined") return "ES";
+    const v = window.localStorage.getItem("planSymbol");
+    return v === "NQ" ? "NQ" : "ES";
+  });
   const [plan, setPlan] = useState<PlanView | null>(null);
   const [authed, setAuthed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -83,19 +91,27 @@ function PlanPage() {
   const todayET = new Date(Date.now() - 4 * 3600 * 1000).toISOString().slice(0, 10);
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("planSymbol", symbolId);
+    }
+  }, [symbolId]);
+
+  useEffect(() => {
     let cancelled = false;
+    setPlan(null);
+    setMsg(null);
     (async () => {
       const { data } = await supabase.auth.getSession();
       if (!cancelled && data.session) setAuthed(true);
       try {
-        const r = await fetchLatest({ data: { symbol: "ES" } });
+        const r = await fetchLatest({ data: { symbol: symbolId } });
         if (cancelled) return;
         if (r.plan && r.plan.plan_date === todayET) {
           setPlan(rowToView(r.plan, Number(r.plan.pivot)));
           return;
         }
         setBusy(true);
-        const g = await fetchGenerate({ data: { symbol: "/ES" } });
+        const g = await fetchGenerate({ data: { symbol: SYMBOL_ROOTS[symbolId] } });
         if (!cancelled && g.plan) {
           setPlan(rowToView(g.plan, Number(g.plan.pivot)));
           setMsg(`Plan generated for ${g.plan.plan_date}.`);
@@ -110,13 +126,13 @@ function PlanPage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [fetchLatest, fetchGenerate, todayET]);
+  }, [fetchLatest, fetchGenerate, todayET, symbolId]);
 
 
   async function generate() {
     setBusy(true); setMsg(null);
     try {
-      const r = await fetchGenerate({ data: { symbol: "/ES" } });
+      const r = await fetchGenerate({ data: { symbol: SYMBOL_ROOTS[symbolId] } });
       if (r.error) {
         setMsg(errorToMsg(r.error));
       } else if (r.plan) {
