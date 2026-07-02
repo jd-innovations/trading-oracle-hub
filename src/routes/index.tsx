@@ -328,7 +328,7 @@ function PlanResultsCard({ authed, symbolId }: { authed: boolean; symbolId: Symb
   const compute = useCallback(async () => {
     setBusy(true); setErr(null);
     try {
-      const r = await fetchResults({ data: { symbol: "ES" } });
+      const r = await fetchResults({ data: { symbol: symbolId } });
       if (r.error) {
         setErr(
           r.error === "no_plan" ? "No saved plan to grade yet — generate one first."
