@@ -346,7 +346,7 @@ function PlanResultsCard({ authed, symbolId }: { authed: boolean; symbolId: Symb
     } finally {
       setBusy(false);
     }
-  }, [fetchResults]);
+  }, [fetchResults, symbolId]);
 
   useEffect(() => {
     if (!live) void compute();
