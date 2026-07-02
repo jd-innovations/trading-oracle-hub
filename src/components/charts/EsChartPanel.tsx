@@ -83,6 +83,7 @@ export function EsChartPanel({ initialSymbol = "ES" }: EsChartPanelProps = {}) {
 
   // SPX → ES basis: ES futures trade at a premium/discount to SPX cash.
   // basis = lastESClose - spxSpot; project SPX GEX strikes onto ES prices.
+  // NQ has no SPX-based GEX projection.
   const esBasis = useMemo(() => {
     if (symbol !== "ES" || spxGexSpot == null) return 0;
     const src = esBase1m.length > 0 ? esBase1m : esCandles;
@@ -91,6 +92,7 @@ export function EsChartPanel({ initialSymbol = "ES" }: EsChartPanelProps = {}) {
   }, [symbol, spxGexSpot, esBase1m]);
 
   const activeGex = useMemo(() => {
+    if (symbol === "NQ") return [];
     if (symbol === "SPX") {
       return spxGexLive.length > 0 ? spxGexLive : gexLevels;
     }
@@ -102,8 +104,8 @@ export function EsChartPanel({ initialSymbol = "ES" }: EsChartPanelProps = {}) {
   }, [symbol, spxGexLive, esBasis]);
 
   const lines = useMemo(
-    () => (showGex ? [...planLines, ...makeGexLines(activeGex)] : planLines),
-    [showGex, activeGex],
+    () => (showGex && symbol !== "NQ" ? [...planLines, ...makeGexLines(activeGex)] : planLines),
+    [showGex, symbol, activeGex],
   );
 
   const { configs: orConfigs, setConfigs: setOrConfigs, reset: resetOr } = useOpeningRanges();
@@ -113,7 +115,7 @@ export function EsChartPanel({ initialSymbol = "ES" }: EsChartPanelProps = {}) {
   );
 
   const profileLevels = useMemo(() => {
-    if (symbol !== "ES") return [];
+    if (symbol === "SPX") return [];
     // Always compute profile levels from the finest-grained bars available
     // (1-minute live feed, falling back to mock 2m). Computing them from the
     // already-resampled display data caused 30m POCs to be derived from
