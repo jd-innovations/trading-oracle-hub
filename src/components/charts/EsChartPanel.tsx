@@ -40,9 +40,13 @@ function makeGexLines(levels: { label: string; price: number }[]): PriceLine[] {
   }));
 }
 
-export function EsChartPanel() {
+interface EsChartPanelProps {
+  initialSymbol?: Symbol;
+}
+
+export function EsChartPanel({ initialSymbol = "ES" }: EsChartPanelProps = {}) {
   const [timeframe, setTimeframe] = useState<Timeframe>("2m");
-  const [symbol, setSymbol] = useState<Symbol>("ES");
+  const [symbol, setSymbol] = useState<Symbol>(initialSymbol);
   const [showGex, setShowGex] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -55,20 +59,21 @@ export function EsChartPanel() {
     spot: spxGexSpot,
     isLive: spxGexIsLive,
     source: spxGexSource,
-  } = useSpxGex(showGex);
-  const { candles: esLive, base1m: esBase1m, isLive: esIsLive, source: esSource } = useEsFeed(timeframe);
+  } = useSpxGex(showGex && symbol !== "NQ");
+  const futuresRoot = symbol === "NQ" ? "/NQ" : "/ES";
+  const { candles: esLive, base1m: esBase1m, isLive: esIsLive, source: esSource } = useEsFeed(timeframe, futuresRoot);
 
 
   // Prefer live feeds; fall back silently to mock if the feed is empty
   // (no Schwab token / not entitled / API down).
   const source =
-    symbol === "ES"
-      ? esLive.length > 0 ? esLive : esCandles
-      : spxLive.length > 0 ? spxLive : spxCandles;
+    symbol === "SPX"
+      ? (spxLive.length > 0 ? spxLive : spxCandles)
+      : (esLive.length > 0 ? esLive : esCandles);
   // Live feeds are already resampled server-side; mock candles still need it.
   const useRawSource =
     (symbol === "SPX" && spxLive.length > 0) ||
-    (symbol === "ES" && esLive.length > 0);
+    (symbol !== "SPX" && esLive.length > 0);
 
   const data = useMemo(() => {
     if (useRawSource) return source;
@@ -78,6 +83,7 @@ export function EsChartPanel() {
 
   // SPX → ES basis: ES futures trade at a premium/discount to SPX cash.
   // basis = lastESClose - spxSpot; project SPX GEX strikes onto ES prices.
+  // NQ has no SPX-based GEX projection.
   const esBasis = useMemo(() => {
     if (symbol !== "ES" || spxGexSpot == null) return 0;
     const src = esBase1m.length > 0 ? esBase1m : esCandles;
@@ -86,6 +92,7 @@ export function EsChartPanel() {
   }, [symbol, spxGexSpot, esBase1m]);
 
   const activeGex = useMemo(() => {
+    if (symbol === "NQ") return [];
     if (symbol === "SPX") {
       return spxGexLive.length > 0 ? spxGexLive : gexLevels;
     }
@@ -97,8 +104,8 @@ export function EsChartPanel() {
   }, [symbol, spxGexLive, esBasis]);
 
   const lines = useMemo(
-    () => (showGex ? [...planLines, ...makeGexLines(activeGex)] : planLines),
-    [showGex, activeGex],
+    () => (showGex && symbol !== "NQ" ? [...planLines, ...makeGexLines(activeGex)] : planLines),
+    [showGex, symbol, activeGex],
   );
 
   const { configs: orConfigs, setConfigs: setOrConfigs, reset: resetOr } = useOpeningRanges();
@@ -108,7 +115,7 @@ export function EsChartPanel() {
   );
 
   const profileLevels = useMemo(() => {
-    if (symbol !== "ES") return [];
+    if (symbol === "SPX") return [];
     // Always compute profile levels from the finest-grained bars available
     // (1-minute live feed, falling back to mock 2m). Computing them from the
     // already-resampled display data caused 30m POCs to be derived from
@@ -171,7 +178,7 @@ export function EsChartPanel() {
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <h3 className="label-xs flex items-center gap-2">
           <span>{symbol} · {timeframe} · Daily Plan Levels</span>
-          {((symbol === "SPX" && spxIsLive) || (symbol === "ES" && esIsLive)) && (
+          {((symbol === "SPX" && spxIsLive) || (symbol !== "SPX" && esIsLive)) && (
             <span
               className="inline-flex items-center gap-1 text-[10px] text-emerald-500"
               title={`Live ${symbol === "SPX" ? spxSource : esSource} feed`}

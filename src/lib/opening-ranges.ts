@@ -3,7 +3,7 @@
 // user configs. A zone "lives" from the window end until a future bar
 // trades fully through both sides (high > zoneHigh && low < zoneLow).
 
-export type Symbol = "ES" | "SPX";
+export type Symbol = "ES" | "NQ" | "SPX";
 export type SessionScope = "RTH" | "Globex" | "Both";
 
 export interface OpeningRangeConfig {

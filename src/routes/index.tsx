@@ -72,7 +72,15 @@ function errorToMsg(e: string): string {
 }
 
 
+type SymbolId = "ES" | "NQ";
+const SYMBOL_ROOTS: Record<SymbolId, string> = { ES: "/ES", NQ: "/NQ" };
+
 function PlanPage() {
+  const [symbolId, setSymbolId] = useState<SymbolId>(() => {
+    if (typeof window === "undefined") return "ES";
+    const v = window.localStorage.getItem("planSymbol");
+    return v === "NQ" ? "NQ" : "ES";
+  });
   const [plan, setPlan] = useState<PlanView | null>(null);
   const [authed, setAuthed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -83,19 +91,27 @@ function PlanPage() {
   const todayET = new Date(Date.now() - 4 * 3600 * 1000).toISOString().slice(0, 10);
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("planSymbol", symbolId);
+    }
+  }, [symbolId]);
+
+  useEffect(() => {
     let cancelled = false;
+    setPlan(null);
+    setMsg(null);
     (async () => {
       const { data } = await supabase.auth.getSession();
       if (!cancelled && data.session) setAuthed(true);
       try {
-        const r = await fetchLatest({ data: { symbol: "ES" } });
+        const r = await fetchLatest({ data: { symbol: symbolId } });
         if (cancelled) return;
         if (r.plan && r.plan.plan_date === todayET) {
           setPlan(rowToView(r.plan, Number(r.plan.pivot)));
           return;
         }
         setBusy(true);
-        const g = await fetchGenerate({ data: { symbol: "/ES" } });
+        const g = await fetchGenerate({ data: { symbol: SYMBOL_ROOTS[symbolId] } });
         if (!cancelled && g.plan) {
           setPlan(rowToView(g.plan, Number(g.plan.pivot)));
           setMsg(`Plan generated for ${g.plan.plan_date}.`);
@@ -110,13 +126,13 @@ function PlanPage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [fetchLatest, fetchGenerate, todayET]);
+  }, [fetchLatest, fetchGenerate, todayET, symbolId]);
 
 
   async function generate() {
     setBusy(true); setMsg(null);
     try {
-      const r = await fetchGenerate({ data: { symbol: "/ES" } });
+      const r = await fetchGenerate({ data: { symbol: SYMBOL_ROOTS[symbolId] } });
       if (r.error) {
         setMsg(errorToMsg(r.error));
       } else if (r.plan) {
@@ -130,11 +146,30 @@ function PlanPage() {
     }
   }
 
+  const symbolSwitcher = (
+    <div className="inline-flex overflow-hidden rounded-md border border-border">
+      {(["ES", "NQ"] as SymbolId[]).map((s) => (
+        <button
+          key={s}
+          onClick={() => setSymbolId(s)}
+          className={`mono px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+            symbolId === s
+              ? "bg-foreground text-background"
+              : "bg-surface-2 text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          {s}
+        </button>
+      ))}
+    </div>
+  );
+
   if (!plan) {
     return (
-      <AppShell title="Daily Plan" subtitle="Module 1 · ES Futures">
+      <AppShell title="Daily Plan" subtitle={`Module 1 · ${symbolId} Futures`}>
+        <div className="mb-3">{symbolSwitcher}</div>
         <div className="flex min-h-[200px] items-center justify-center rounded-md border border-border bg-surface-1 p-6 text-sm text-muted-foreground">
-          {busy ? "Generating today's plan from live /ES bars..." : (msg ?? "Loading...")}
+          {busy ? `Generating today's plan from live ${SYMBOL_ROOTS[symbolId]} bars...` : (msg ?? "Loading...")}
         </div>
       </AppShell>
     );
@@ -142,10 +177,11 @@ function PlanPage() {
 
 
   return (
-    <AppShell title="Daily Plan" subtitle="Module 1 · ES Futures">
+    <AppShell title="Daily Plan" subtitle={`Module 1 · ${symbolId} Futures`}>
       <div className="mb-3 flex flex-wrap items-center gap-2">
+        {symbolSwitcher}
         <span className="mono rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-500">
-          LIVE · SCHWAB /ES
+          LIVE · SCHWAB {SYMBOL_ROOTS[symbolId]}
         </span>
         <button
           onClick={generate}
@@ -163,7 +199,7 @@ function PlanPage() {
         <div className="space-y-3 lg:col-span-2">
           <DailyPlanCard plan={plan} />
           <TargetsExplained plan={plan} />
-          <EsChartPanel />
+          <EsChartPanel initialSymbol={symbolId} key={symbolId} />
         </div>
         <div className="space-y-3">
           <LevelRail plan={plan} />
@@ -186,7 +222,7 @@ function PlanPage() {
         </div>
       </div>
       <div className="mt-3">
-        <PlanResultsCard authed={authed} />
+        <PlanResultsCard authed={authed} symbolId={symbolId} />
       </div>
     </AppShell>
   );
@@ -282,7 +318,7 @@ function LevelRail({ plan: p }: { plan: PlanView }) {
   );
 }
 
-function PlanResultsCard({ authed }: { authed: boolean }) {
+function PlanResultsCard({ authed, symbolId }: { authed: boolean; symbolId: SymbolId }) {
   const [live, setLive] = useState<PlanResultComputed | null>(null);
   const [liveDate, setLiveDate] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -292,7 +328,7 @@ function PlanResultsCard({ authed }: { authed: boolean }) {
   const compute = useCallback(async () => {
     setBusy(true); setErr(null);
     try {
-      const r = await fetchResults({ data: { symbol: "ES" } });
+      const r = await fetchResults({ data: { symbol: symbolId } });
       if (r.error) {
         setErr(
           r.error === "no_plan" ? "No saved plan to grade yet — generate one first."
@@ -310,8 +346,9 @@ function PlanResultsCard({ authed }: { authed: boolean }) {
     } finally {
       setBusy(false);
     }
-  }, [fetchResults]);
+  }, [fetchResults, symbolId]);
 
+  useEffect(() => { setLive(null); setLiveDate(null); }, [symbolId]);
   useEffect(() => {
     if (!live) void compute();
   }, [live, compute]);

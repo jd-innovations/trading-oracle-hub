@@ -48,7 +48,8 @@ function toRow(p: GeneratedPlan, symbol: string) {
 export const generateDailyPlan = createServerFn({ method: "POST" })
   .inputValidator(z.object({ symbol: z.string().default("/ES") }).partial())
   .handler(async ({ data }): Promise<{ plan?: DailyPlanRow; error?: string }> => {
-    const symbol = data?.symbol ?? "/ES";
+    const { getSymbol } = await import("./symbols");
+    const sym = getSymbol(data?.symbol ?? "/ES");
     const {
       getSchwabAccessToken,
       getSchwabOwnerUserId,
@@ -60,7 +61,7 @@ export const generateDailyPlan = createServerFn({ method: "POST" })
     let bars;
     try {
       const token = await getSchwabAccessToken(ownerId);
-      bars = await fetchSchwabPriceHistory({ token, symbol, lookbackDays: 40 });
+      bars = await fetchSchwabPriceHistory({ token, symbol: sym.schwabRoot, lookbackDays: 40 });
     } catch (e) {
       if (e instanceof SchwabReauthRequired) return { error: "reauth_required" };
       console.error("[plan] history fetch failed", e);
@@ -92,11 +93,11 @@ export const generateDailyPlan = createServerFn({ method: "POST" })
     };
     const eightThirtyBar = find830();
     const anchor = eightThirtyBar ? eightThirtyBar.open : bars[bars.length - 1].close;
-    const gen = generatePlanFromBars(bars, anchor);
+    const gen = generatePlanFromBars(bars, anchor, { tickSize: sym.tickSize, minGap: sym.minGap });
     if (!gen) return { error: "insufficient_session_data" };
 
 
-    const row = toRow(gen, symbol === "/ES" ? "ES" : symbol);
+    const row = toRow(gen, sym.id);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: upserted, error } = await supabaseAdmin
       .from("daily_plans")
@@ -156,8 +157,10 @@ export const computePlanResultsFn = createServerFn({ method: "POST" })
     error?: string;
   }> => {
     const symbol = data?.symbol ?? "ES";
+    const { getSymbol } = await import("./symbols");
+    const sym = getSymbol(symbol);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    let q = supabaseAdmin.from("daily_plans").select("*").eq("symbol", symbol);
+    let q = supabaseAdmin.from("daily_plans").select("*").eq("symbol", sym.id);
     if (data?.planDate) q = q.eq("plan_date", data.planDate);
     const { data: rows, error } = await q.order("plan_date", { ascending: false }).limit(1);
     if (error) { console.error("[results] plan lookup failed", error); return { error: "plan_lookup_failed" }; }
@@ -173,7 +176,7 @@ export const computePlanResultsFn = createServerFn({ method: "POST" })
       const token = await getSchwabAccessToken(ownerId);
       bars = await fetchSchwabPriceHistory({
         token,
-        symbol: symbol === "ES" ? "/ES" : symbol,
+        symbol: sym.schwabRoot,
         lookbackDays: 10,
       });
     } catch (e) {
