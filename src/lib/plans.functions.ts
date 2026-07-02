@@ -157,8 +157,10 @@ export const computePlanResultsFn = createServerFn({ method: "POST" })
     error?: string;
   }> => {
     const symbol = data?.symbol ?? "ES";
+    const { getSymbol } = await import("./symbols");
+    const sym = getSymbol(symbol);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    let q = supabaseAdmin.from("daily_plans").select("*").eq("symbol", symbol);
+    let q = supabaseAdmin.from("daily_plans").select("*").eq("symbol", sym.id);
     if (data?.planDate) q = q.eq("plan_date", data.planDate);
     const { data: rows, error } = await q.order("plan_date", { ascending: false }).limit(1);
     if (error) { console.error("[results] plan lookup failed", error); return { error: "plan_lookup_failed" }; }
@@ -174,7 +176,7 @@ export const computePlanResultsFn = createServerFn({ method: "POST" })
       const token = await getSchwabAccessToken(ownerId);
       bars = await fetchSchwabPriceHistory({
         token,
-        symbol: symbol === "ES" ? "/ES" : symbol,
+        symbol: sym.schwabRoot,
         lookbackDays: 10,
       });
     } catch (e) {
