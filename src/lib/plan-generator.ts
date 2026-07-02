@@ -42,10 +42,6 @@ function isRth(t: number): boolean {
   const m = etMinutesOfDay(t);
   return m >= RTH_START_MIN && m < RTH_END_MIN;
 }
-function roundTickBy(p: number, tick: number): number {
-  return Math.round(p / tick) * tick;
-}
-
 function groupRthSessions(bars: Bar[]): { key: string; bars: Bar[] }[] {
   const map = new Map<string, Bar[]>();
   for (const b of bars) {
@@ -58,13 +54,13 @@ function groupRthSessions(bars: Bar[]): { key: string; bars: Bar[] }[] {
   return [...map.entries()].map(([key, bars]) => ({ key, bars })).sort((a, b) => a.key.localeCompare(b.key));
 }
 
-function computeTpo(bars: Bar[]): { poc: number; vah: number; val: number } | null {
+function computeTpo(bars: Bar[], tick: number): { poc: number; vah: number; val: number } | null {
   if (!bars.length) return null;
   const buckets = new Map<number, Set<number>>(); // priceBin -> bracket indexes
   for (const b of bars) {
     const bracket = Math.floor((etMinutesOfDay(b.time) - RTH_START_MIN) / BRACKET_MIN);
-    const lo = Math.round(b.low / TICK);
-    const hi = Math.round(b.high / TICK);
+    const lo = Math.round(b.low / tick);
+    const hi = Math.round(b.high / tick);
     for (let p = lo; p <= hi; p++) {
       let s = buckets.get(p);
       if (!s) { s = new Set(); buckets.set(p, s); }
@@ -87,13 +83,13 @@ function computeTpo(bars: Bar[]): { poc: number; vah: number; val: number } | nu
     else break;
   }
   return {
-    poc: rows[pocIdx].bin * TICK,
-    vah: rows[hi].bin * TICK,
-    val: rows[lo].bin * TICK,
+    poc: rows[pocIdx].bin * tick,
+    vah: rows[hi].bin * tick,
+    val: rows[lo].bin * tick,
   };
 }
 
-function compute30mPocs(bars: Bar[]): { time: number; price: number }[] {
+function compute30mPocs(bars: Bar[], tick: number): { time: number; price: number }[] {
   const groups = new Map<number, Bar[]>();
   for (const b of bars) {
     const bucket = Math.floor((etMinutesOfDay(b.time) - RTH_START_MIN) / BRACKET_MIN);
@@ -107,12 +103,12 @@ function compute30mPocs(bars: Bar[]): { time: number; price: number }[] {
     if (!arr.length) continue;
     const counts = new Map<number, number>();
     for (const b of arr) {
-      const lo = Math.round(b.low / TICK), hi = Math.round(b.high / TICK);
+      const lo = Math.round(b.low / tick), hi = Math.round(b.high / tick);
       for (let p = lo; p <= hi; p++) counts.set(p, (counts.get(p) ?? 0) + 1);
     }
     let bestBin = 0, bestC = -1;
     for (const [bin, c] of counts) if (c > bestC) { bestC = c; bestBin = bin; }
-    out.push({ time: arr[0].time, price: bestBin * TICK });
+    out.push({ time: arr[0].time, price: bestBin * tick });
   }
   return out;
 }
