@@ -40,9 +40,13 @@ function makeGexLines(levels: { label: string; price: number }[]): PriceLine[] {
   }));
 }
 
-export function EsChartPanel() {
+interface EsChartPanelProps {
+  initialSymbol?: Symbol;
+}
+
+export function EsChartPanel({ initialSymbol = "ES" }: EsChartPanelProps = {}) {
   const [timeframe, setTimeframe] = useState<Timeframe>("2m");
-  const [symbol, setSymbol] = useState<Symbol>("ES");
+  const [symbol, setSymbol] = useState<Symbol>(initialSymbol);
   const [showGex, setShowGex] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -55,20 +59,21 @@ export function EsChartPanel() {
     spot: spxGexSpot,
     isLive: spxGexIsLive,
     source: spxGexSource,
-  } = useSpxGex(showGex);
-  const { candles: esLive, base1m: esBase1m, isLive: esIsLive, source: esSource } = useEsFeed(timeframe);
+  } = useSpxGex(showGex && symbol !== "NQ");
+  const futuresRoot = symbol === "NQ" ? "/NQ" : "/ES";
+  const { candles: esLive, base1m: esBase1m, isLive: esIsLive, source: esSource } = useEsFeed(timeframe, futuresRoot);
 
 
   // Prefer live feeds; fall back silently to mock if the feed is empty
   // (no Schwab token / not entitled / API down).
   const source =
-    symbol === "ES"
-      ? esLive.length > 0 ? esLive : esCandles
-      : spxLive.length > 0 ? spxLive : spxCandles;
+    symbol === "SPX"
+      ? (spxLive.length > 0 ? spxLive : spxCandles)
+      : (esLive.length > 0 ? esLive : esCandles);
   // Live feeds are already resampled server-side; mock candles still need it.
   const useRawSource =
     (symbol === "SPX" && spxLive.length > 0) ||
-    (symbol === "ES" && esLive.length > 0);
+    (symbol !== "SPX" && esLive.length > 0);
 
   const data = useMemo(() => {
     if (useRawSource) return source;
