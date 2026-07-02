@@ -13,7 +13,8 @@
 //   naked30mPocs = unvisited 30-minute POCs from the prior RTH session
 
 
-const TICK = 0.25;
+const DEFAULT_TICK = 0.25;
+const DEFAULT_MIN_GAP = 8;
 const BRACKET_MIN = 30;
 const VA_PCT = 0.7;
 const RTH_START_MIN = 9 * 60 + 30;
