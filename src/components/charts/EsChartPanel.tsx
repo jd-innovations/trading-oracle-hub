@@ -178,7 +178,7 @@ export function EsChartPanel({ initialSymbol = "ES" }: EsChartPanelProps = {}) {
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <h3 className="label-xs flex items-center gap-2">
           <span>{symbol} · {timeframe} · Daily Plan Levels</span>
-          {((symbol === "SPX" && spxIsLive) || (symbol === "ES" && esIsLive)) && (
+          {((symbol === "SPX" && spxIsLive) || (symbol !== "SPX" && esIsLive)) && (
             <span
               className="inline-flex items-center gap-1 text-[10px] text-emerald-500"
               title={`Live ${symbol === "SPX" ? spxSource : esSource} feed`}
