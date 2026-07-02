@@ -93,11 +93,11 @@ export const generateDailyPlan = createServerFn({ method: "POST" })
     };
     const eightThirtyBar = find830();
     const anchor = eightThirtyBar ? eightThirtyBar.open : bars[bars.length - 1].close;
-    const gen = generatePlanFromBars(bars, anchor);
+    const gen = generatePlanFromBars(bars, anchor, { tickSize: sym.tickSize, minGap: sym.minGap });
     if (!gen) return { error: "insufficient_session_data" };
 
 
-    const row = toRow(gen, symbol === "/ES" ? "ES" : symbol);
+    const row = toRow(gen, sym.id);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: upserted, error } = await supabaseAdmin
       .from("daily_plans")
