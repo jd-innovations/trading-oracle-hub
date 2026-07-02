@@ -18,7 +18,7 @@ export interface SymbolConfig {
 
 export const SYMBOLS: Record<SymbolId, SymbolConfig> = {
   ES: { id: "ES", schwabRoot: "/ES", label: "ES", tickSize: 0.25, minGap: 8 },
-  NQ: { id: "NQ", schwabRoot: "/NQ", label: "NQ", tickSize: 0.25, minGap: 25 },
+  NQ: { id: "NQ", schwabRoot: "/NQ", label: "NQ", tickSize: 0.25, minGap: 80 },
 };
 
 export const SUPPORTED_SYMBOLS: SymbolConfig[] = [SYMBOLS.ES, SYMBOLS.NQ];
