@@ -242,7 +242,6 @@ export function generatePlanFromBars(
     ...nakedUniq,
   ];
   const uniq = (xs: number[]) => [...new Set(xs.map(roundTick))];
-  const MIN_GAP = 8; // points — minimum spacing between pivot/targets
   const above = uniq(structuralPool.filter(p => p > pivot)).sort((a, b) => a - b);
   const below = uniq(structuralPool.filter(p => p < pivot)).sort((a, b) => b - a);
 
