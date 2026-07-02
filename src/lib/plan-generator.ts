@@ -188,7 +188,7 @@ export function generatePlanFromBars(
     const sessEnd = sess.bars[sess.bars.length - 1].time;
 
     // 30m POCs
-    for (const p of compute30mPocs(sess.bars)) {
+    for (const p of compute30mPocs(sess.bars, TICK)) {
       if (touched(p.price, sess.bars, p.time + BRACKET_MIN * 60, laterBars)) continue;
       nakedPocs30m.push(roundTick(p.price));
     }
