@@ -130,11 +130,23 @@ export interface GeneratedPlan {
   context: string;
 }
 
-export function generatePlanFromBars(bars: Bar[], anchorPrice?: number): GeneratedPlan | null {
+export interface GenerateOptions {
+  tickSize?: number;
+  minGap?: number;
+}
+
+export function generatePlanFromBars(
+  bars: Bar[],
+  anchorPrice?: number,
+  options: GenerateOptions = {},
+): GeneratedPlan | null {
+  const TICK = options.tickSize ?? DEFAULT_TICK;
+  const MIN_GAP = options.minGap ?? DEFAULT_MIN_GAP;
+  const roundTick = (p: number) => Math.round(p / TICK) * TICK;
   const sessions = groupRthSessions(bars);
   if (sessions.length < 1) return null;
   const prior = sessions[sessions.length - 1];
-  const tpo = computeTpo(prior.bars);
+  const tpo = computeTpo(prior.bars, TICK);
   if (!tpo) return null;
 
   const priorHigh = Math.max(...prior.bars.map(b => b.high));
