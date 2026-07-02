@@ -146,11 +146,30 @@ function PlanPage() {
     }
   }
 
+  const symbolSwitcher = (
+    <div className="inline-flex overflow-hidden rounded-md border border-border">
+      {(["ES", "NQ"] as SymbolId[]).map((s) => (
+        <button
+          key={s}
+          onClick={() => setSymbolId(s)}
+          className={`mono px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+            symbolId === s
+              ? "bg-foreground text-background"
+              : "bg-surface-2 text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          {s}
+        </button>
+      ))}
+    </div>
+  );
+
   if (!plan) {
     return (
-      <AppShell title="Daily Plan" subtitle="Module 1 · ES Futures">
+      <AppShell title="Daily Plan" subtitle={`Module 1 · ${symbolId} Futures`}>
+        <div className="mb-3">{symbolSwitcher}</div>
         <div className="flex min-h-[200px] items-center justify-center rounded-md border border-border bg-surface-1 p-6 text-sm text-muted-foreground">
-          {busy ? "Generating today's plan from live /ES bars..." : (msg ?? "Loading...")}
+          {busy ? `Generating today's plan from live ${SYMBOL_ROOTS[symbolId]} bars...` : (msg ?? "Loading...")}
         </div>
       </AppShell>
     );
@@ -158,10 +177,11 @@ function PlanPage() {
 
 
   return (
-    <AppShell title="Daily Plan" subtitle="Module 1 · ES Futures">
+    <AppShell title="Daily Plan" subtitle={`Module 1 · ${symbolId} Futures`}>
       <div className="mb-3 flex flex-wrap items-center gap-2">
+        {symbolSwitcher}
         <span className="mono rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-500">
-          LIVE · SCHWAB /ES
+          LIVE · SCHWAB {SYMBOL_ROOTS[symbolId]}
         </span>
         <button
           onClick={generate}
@@ -179,7 +199,7 @@ function PlanPage() {
         <div className="space-y-3 lg:col-span-2">
           <DailyPlanCard plan={plan} />
           <TargetsExplained plan={plan} />
-          <EsChartPanel />
+          <EsChartPanel initialSymbol={symbolId} key={symbolId} />
         </div>
         <div className="space-y-3">
           <LevelRail plan={plan} />
@@ -202,7 +222,7 @@ function PlanPage() {
         </div>
       </div>
       <div className="mt-3">
-        <PlanResultsCard authed={authed} />
+        <PlanResultsCard authed={authed} symbolId={symbolId} />
       </div>
     </AppShell>
   );
