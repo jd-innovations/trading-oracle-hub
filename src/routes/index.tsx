@@ -267,7 +267,7 @@ function DailyPlanCard({ plan: p }: { plan: PlanView }) {
 {`Daily Plan: ${p.symbol}
 $ES FUTURES ${p.date}
 
-`}<span className="text-bull">{`T3↑ ${fmtPrice(p.t3Up)} >> T2↑ ${fmtPrice(p.t2Up)} >> T1↑ ${fmtPrice(p.t1Up)}`}</span>{`
+`}<span className="text-bull">{`T1↑ ${fmtPrice(p.t1Up)} >> T2↑ ${fmtPrice(p.t2Up)} >> T3↑ ${fmtPrice(p.t3Up)}`}</span>{`
 `}<span className="text-pivot">{`Daily Pivot: ${fmtPrice(p.pivot)}`}</span>{` / Now trading at `}<span className="text-foreground font-semibold">{fmtPrice(p.now)}</span>{`
 `}<span className="text-bear">{`T1↓ ${fmtPrice(p.t1Dn)} >> T2↓ ${fmtPrice(p.t2Dn)} >> T3↓ ${fmtPrice(p.t3Dn)}`}</span>{`
 `}<span className="text-muted-foreground">@everyone</span>{`
