@@ -26,6 +26,14 @@ export function AppShell({
             </h1>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            <Link
+              to="/settings/brokers"
+              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-2 py-1.5 text-[11px] font-medium text-foreground hover:bg-muted md:hidden"
+              aria-label="Connect Schwab"
+            >
+              <Plug className="h-3.5 w-3.5" />
+              Schwab
+            </Link>
             <SessionClock />
             <ThemeToggle />
           </div>
