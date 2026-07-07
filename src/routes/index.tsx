@@ -10,6 +10,7 @@ import { fmtPrice, planToText, resultToText } from "@/lib/format";
 import { generateDailyPlan, getLatestPlan, computePlanResultsFn, type DailyPlanRow } from "@/lib/plans.functions";
 import type { PlanResultComputed } from "@/lib/plan-results";
 import { supabase } from "@/integrations/supabase/client";
+import { useEsFeed } from "@/lib/use-es-feed";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -81,12 +82,17 @@ function PlanPage() {
     const v = window.localStorage.getItem("planSymbol");
     return v === "NQ" ? "NQ" : "ES";
   });
-  const [plan, setPlan] = useState<PlanView | null>(null);
+  const [planRow, setPlanRow] = useState<DailyPlanRow | null>(null);
   const [authed, setAuthed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const fetchLatest = useServerFn(getLatestPlan);
   const fetchGenerate = useServerFn(generateDailyPlan);
+  const { base1m } = useEsFeed("1m", SYMBOL_ROOTS[symbolId]);
+  const lastPrice = base1m.length ? base1m[base1m.length - 1].close : undefined;
+  const plan: PlanView | null = planRow
+    ? rowToView(planRow, lastPrice ?? Number(planRow.pivot))
+    : null;
 
   const todayET = new Date(Date.now() - 4 * 3600 * 1000).toISOString().slice(0, 10);
 
