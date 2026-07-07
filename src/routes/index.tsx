@@ -10,6 +10,7 @@ import { fmtPrice, planToText, resultToText } from "@/lib/format";
 import { generateDailyPlan, getLatestPlan, computePlanResultsFn, type DailyPlanRow } from "@/lib/plans.functions";
 import type { PlanResultComputed } from "@/lib/plan-results";
 import { supabase } from "@/integrations/supabase/client";
+import { useEsFeed } from "@/lib/use-es-feed";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -81,12 +82,17 @@ function PlanPage() {
     const v = window.localStorage.getItem("planSymbol");
     return v === "NQ" ? "NQ" : "ES";
   });
-  const [plan, setPlan] = useState<PlanView | null>(null);
+  const [planRow, setPlanRow] = useState<DailyPlanRow | null>(null);
   const [authed, setAuthed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const fetchLatest = useServerFn(getLatestPlan);
   const fetchGenerate = useServerFn(generateDailyPlan);
+  const { base1m } = useEsFeed("2m", SYMBOL_ROOTS[symbolId]);
+  const lastPrice = base1m.length ? base1m[base1m.length - 1].close : undefined;
+  const plan: PlanView | null = planRow
+    ? rowToView(planRow, lastPrice ?? Number(planRow.pivot))
+    : null;
 
   const todayET = new Date(Date.now() - 4 * 3600 * 1000).toISOString().slice(0, 10);
 
@@ -98,7 +104,7 @@ function PlanPage() {
 
   useEffect(() => {
     let cancelled = false;
-    setPlan(null);
+    setPlanRow(null);
     setMsg(null);
     (async () => {
       const { data } = await supabase.auth.getSession();
@@ -107,16 +113,16 @@ function PlanPage() {
         const r = await fetchLatest({ data: { symbol: symbolId } });
         if (cancelled) return;
         if (r.plan && r.plan.plan_date === todayET) {
-          setPlan(rowToView(r.plan, Number(r.plan.pivot)));
+          setPlanRow(r.plan);
           return;
         }
         setBusy(true);
         const g = await fetchGenerate({ data: { symbol: SYMBOL_ROOTS[symbolId] } });
         if (!cancelled && g.plan) {
-          setPlan(rowToView(g.plan, Number(g.plan.pivot)));
+          setPlanRow(g.plan);
           setMsg(`Plan generated for ${g.plan.plan_date}.`);
         } else if (!cancelled && g.error) {
-          if (r.plan) setPlan(rowToView(r.plan, Number(r.plan.pivot)));
+          if (r.plan) setPlanRow(r.plan);
           setMsg(errorToMsg(g.error));
         }
       } catch (e) {
@@ -136,7 +142,7 @@ function PlanPage() {
       if (r.error) {
         setMsg(errorToMsg(r.error));
       } else if (r.plan) {
-        setPlan(rowToView(r.plan, Number(r.plan.pivot)));
+        setPlanRow(r.plan);
         setMsg(`Plan generated for ${r.plan.plan_date}.`);
       }
     } catch (e) {
@@ -267,7 +273,7 @@ function DailyPlanCard({ plan: p }: { plan: PlanView }) {
 {`Daily Plan: ${p.symbol}
 $ES FUTURES ${p.date}
 
-`}<span className="text-bull">{`T3↑ ${fmtPrice(p.t3Up)} >> T2↑ ${fmtPrice(p.t2Up)} >> T1↑ ${fmtPrice(p.t1Up)}`}</span>{`
+`}<span className="text-bull">{`T1↑ ${fmtPrice(p.t1Up)} >> T2↑ ${fmtPrice(p.t2Up)} >> T3↑ ${fmtPrice(p.t3Up)}`}</span>{`
 `}<span className="text-pivot">{`Daily Pivot: ${fmtPrice(p.pivot)}`}</span>{` / Now trading at `}<span className="text-foreground font-semibold">{fmtPrice(p.now)}</span>{`
 `}<span className="text-bear">{`T1↓ ${fmtPrice(p.t1Dn)} >> T2↓ ${fmtPrice(p.t2Dn)} >> T3↓ ${fmtPrice(p.t3Dn)}`}</span>{`
 `}<span className="text-muted-foreground">@everyone</span>{`

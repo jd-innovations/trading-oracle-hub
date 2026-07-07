@@ -11,7 +11,7 @@ export function planToText(p: DailyPlan): string {
     `Daily Plan: ${p.symbol}`,
     `$ES FUTURES ${p.date}`,
     ``,
-    `T3↑ ${fmtPrice(p.t3Up)} >> T2↑ ${fmtPrice(p.t2Up)} >> T1↑ ${fmtPrice(p.t1Up)}`,
+    `T1↑ ${fmtPrice(p.t1Up)} >> T2↑ ${fmtPrice(p.t2Up)} >> T3↑ ${fmtPrice(p.t3Up)}`,
     `Daily Pivot: ${fmtPrice(p.pivot)} / Now trading at ${fmtPrice(p.now)}`,
     `T1↓ ${fmtPrice(p.t1Dn)} >> T2↓ ${fmtPrice(p.t2Dn)} >> T3↓ ${fmtPrice(p.t3Dn)}`,
     `@everyone`,
