@@ -88,7 +88,7 @@ function PlanPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const fetchLatest = useServerFn(getLatestPlan);
   const fetchGenerate = useServerFn(generateDailyPlan);
-  const { base1m } = useEsFeed("1m", SYMBOL_ROOTS[symbolId]);
+  const { base1m } = useEsFeed("2m", SYMBOL_ROOTS[symbolId]);
   const lastPrice = base1m.length ? base1m[base1m.length - 1].close : undefined;
   const plan: PlanView | null = planRow
     ? rowToView(planRow, lastPrice ?? Number(planRow.pivot))
