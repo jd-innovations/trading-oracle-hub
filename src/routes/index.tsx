@@ -104,7 +104,7 @@ function PlanPage() {
 
   useEffect(() => {
     let cancelled = false;
-    setPlan(null);
+    setPlanRow(null);
     setMsg(null);
     (async () => {
       const { data } = await supabase.auth.getSession();
@@ -113,16 +113,16 @@ function PlanPage() {
         const r = await fetchLatest({ data: { symbol: symbolId } });
         if (cancelled) return;
         if (r.plan && r.plan.plan_date === todayET) {
-          setPlan(rowToView(r.plan, Number(r.plan.pivot)));
+          setPlanRow(r.plan);
           return;
         }
         setBusy(true);
         const g = await fetchGenerate({ data: { symbol: SYMBOL_ROOTS[symbolId] } });
         if (!cancelled && g.plan) {
-          setPlan(rowToView(g.plan, Number(g.plan.pivot)));
+          setPlanRow(g.plan);
           setMsg(`Plan generated for ${g.plan.plan_date}.`);
         } else if (!cancelled && g.error) {
-          if (r.plan) setPlan(rowToView(r.plan, Number(r.plan.pivot)));
+          if (r.plan) setPlanRow(r.plan);
           setMsg(errorToMsg(g.error));
         }
       } catch (e) {
@@ -142,7 +142,7 @@ function PlanPage() {
       if (r.error) {
         setMsg(errorToMsg(r.error));
       } else if (r.plan) {
-        setPlan(rowToView(r.plan, Number(r.plan.pivot)));
+        setPlanRow(r.plan);
         setMsg(`Plan generated for ${r.plan.plan_date}.`);
       }
     } catch (e) {
