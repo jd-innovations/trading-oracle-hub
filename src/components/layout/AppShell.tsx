@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import { Link } from "@tanstack/react-router";
+import { Plug } from "lucide-react";
 import { BottomTabs, SideNav } from "./Nav";
 import { SessionClock } from "./SessionClock";
 import { ThemeToggle } from "./ThemeToggle";
