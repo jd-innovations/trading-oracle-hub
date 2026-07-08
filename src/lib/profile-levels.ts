@@ -400,8 +400,11 @@ export interface PriorRthProfile {
 export function getPriorRthProfile(bars: Candle[]): PriorRthProfile | null {
   const sessions = groupRthSessions(bars);
   if (!sessions.length) return null;
-  // Prefer the last COMPLETED session; if only one exists, use it.
-  const session = sessions.length > 1 ? sessions[sessions.length - 2] : sessions[0];
+  // Show yesterday's RTH: most recent session whose ET date is strictly before today.
+  const todayET = new Date(Date.now() - ET_OFFSET_HOURS * 3600 * 1000).toISOString().slice(0, 10);
+  const prior = sessions.filter(s => s.dayKey < todayET);
+  if (!prior.length) return null;
+  const session = prior[prior.length - 1];
   const stats = computeTpoProfile(session.bars);
   if (!stats) return null;
 

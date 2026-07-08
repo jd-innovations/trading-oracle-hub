@@ -161,7 +161,12 @@ export const computePlanResultsFn = createServerFn({ method: "POST" })
     const sym = getSymbol(symbol);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     let q = supabaseAdmin.from("daily_plans").select("*").eq("symbol", sym.id);
-    if (data?.planDate) q = q.eq("plan_date", data.planDate);
+    if (data?.planDate) {
+      q = q.eq("plan_date", data.planDate);
+    } else {
+      const todayET = new Date(Date.now() - 4 * 3600 * 1000).toISOString().slice(0, 10);
+      q = q.lt("plan_date", todayET);
+    }
     const { data: rows, error } = await q.order("plan_date", { ascending: false }).limit(1);
     if (error) { console.error("[results] plan lookup failed", error); return { error: "plan_lookup_failed" }; }
     const plan = (rows?.[0] as DailyPlanRow | undefined);
