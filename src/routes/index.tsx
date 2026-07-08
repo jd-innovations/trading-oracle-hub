@@ -224,7 +224,7 @@ function PlanPage() {
               </ul>
             </Panel>
           )}
-          <Panel title="Session TPO (Live)"><TpoProfile compact /></Panel>
+          <Panel title="Session TPO (Live)"><TpoProfile compact symbol={SYMBOL_ROOTS[symbolId]} /></Panel>
         </div>
       </div>
       <div className="mt-3">
