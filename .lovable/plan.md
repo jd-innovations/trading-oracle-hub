@@ -1,57 +1,66 @@
-## Fix: pivot should be the closest structural level to the current price
+## Wire live data into TPO Profile + tighten Plan Results
 
-### Problem
+Two panels still show mock data. Plan Results already runs a live server fn (`computePlanResultsFn`) but silently falls back to `mock/data.planResult` when there's no plan or no auth — user reads a stale mock and thinks it's live. TpoProfile is 100% mock (`tpoRows`, `tpoStats` from `src/lib/mock/data.ts`).
 
-Today `generatePlanFromBars` picks pivot from only prior-session `{VAH, POC, VAL}`:
+### 1. TpoProfile → live TPO from prior RTH session
 
+Reuse the existing profile math (`computeTpoProfile` is already in `src/lib/profile-levels.ts`, exercised by the chart overlay) instead of shipping a second copy.
+
+**a. `src/lib/profile-levels.ts`**
+- Export `computeTpoProfile` and the internal `groupRthSessions` helper so consumers can pull the prior-RTH profile without recomputing sessions. `TpoProfile` (interface) is already declared — export it too.
+- Add a small helper `getPriorRthProfile(bars: Candle[]): { rows: {price:number; letters:string}[]; poc:number; vah:number; val:number } | null` that: groups sessions, picks the last completed RTH session, and returns the per-price-bin bracket letters (A, B, C, …) plus POC/VAH/VAL. Bracket letters come from the same 30-min bucketing already used inside `computeTpoProfile`; we just also keep the mapping `bin -> sorted bracket indices` and render `String.fromCharCode(65 + idx)`.
+
+**b. New hook `src/lib/use-tpo-profile.ts`**
 ```ts
-const pivotRef = structural.reduce((best, cur) =>
-  Math.abs(cur.price - anchor) < Math.abs(best.price - anchor) ? cur : best,
-);
+export function useTpoProfile(symbol: string) {
+  const { base1m, source } = useEsFeed("2m", symbol);
+  const profile = useMemo(() => getPriorRthProfile(base1m), [base1m]);
+  return { profile, source };
+}
 ```
+No new network calls — piggybacks on `useEsFeed`'s 1-minute Schwab pull that the chart already runs.
 
-In the NQ example the anchor is 29,176.75. A naked 30m POC sits at 29,210 (much closer), but the algorithm ignores it and picks VAL 29,323.75 — so 29,210 ends up as T1↓ instead of pivot.
-
-### Change (one file: `src/lib/plan-generator.ts`)
-
-Widen the pivot candidate pool to every structural level we already collect, then pick the nearest to `anchor`:
-
+**c. `src/components/charts/TpoProfile.tsx`** — rewrite to render from props:
 ```ts
-const pivotPool = [
-  tpo.vah, tpo.poc, tpo.val,
-  priorHigh, priorLow,
-  ...nakedStructs.map(s => s.price),   // naked H/L/VAH/POC/VAL, last 25 sess
-  ...nakedUniq,                        // naked 30m POCs, last 25 sess
-].map(roundTick);
-
-const pivot = pivotPool.reduce((best, cur) =>
-  Math.abs(cur - anchor) < Math.abs(best - anchor) ? cur : best
-);
+interface Props {
+  compact?: boolean;
+  symbol?: string;           // "/ES" | "/NQ"
+}
 ```
+Inside, call `useTpoProfile(symbol ?? "/ES")`. Show:
+- Header row VAH/POC/VAL from live stats (fall back to `—` when `profile` is null).
+- Empty state: "Waiting for Schwab bars…" when `source === "mock"` or no session yet.
+- Rows: iterate `profile.rows` sorted by price desc (same layout as today).
 
-Then the target pool becomes every remaining structural level (exclude only `pivot`), split above/below and fed to the existing `pickTargets` (which already enforces the 8pt / 80pt `MIN_GAP` skip logic):
+**d. Update the two call sites:**
+- `src/routes/index.tsx` line 227: `<TpoProfile compact symbol={SYMBOL_ROOTS[symbolId]} />` — follows the ES/NQ toggle.
+- `src/routes/analysis.tsx` line 23: `<TpoProfile />` for now (defaults to /ES). Follow-up if analysis grows a symbol switcher.
 
-```ts
-const remaining = uniq(pivotPool.filter(p => p !== pivot));
-const above = remaining.filter(p => p > pivot).sort((a, b) => a - b);
-const below = remaining.filter(p => p < pivot).sort((a, b) => b - a);
-```
+**e. Delete `tpoRows` and `tpoStats` from `src/lib/mock/data.ts`** — only TpoProfile used them.
 
-`pickTargets` already falls back to prior H/L + ¼·VA extensions when the structural pool runs out, so extension behavior is unchanged.
+### 2. Plan Results — drop mock fallback
 
-### Downstream
+Panel currently reads `const r = live ?? planResult` and stamps "MOCK" when unauthed / no saved plan. Change so the panel reflects reality:
 
-- `pivotRef.name` is used only in the context string (`"...pivot 29323.75 (VAL)"`). Since pivot can now be any type (H, L, VAH, POC, VAL, 30m POC), tag it generically — either drop the `(VAL)` suffix or label it by matched source (e.g. `(naked POC)`). Small cosmetic tweak in the two `biasNote` template strings.
-- `PlanView` / `rowToView` / DB schema / Discord format / `LevelRail`: no changes. They only read `pivot` as a number.
-- Live "Now trading at" already flows from `useEsFeed` (previous fix) — unrelated.
+- Remove the `planResult` import in `src/routes/index.tsx` and the `?? planResult` fallback.
+- When `!live`: render an empty state inside the Panel with the `err` message (or a neutral "Generate a plan first, then grade it." when there's no error). Keep the "Grade Plan" button.
+- Score chip and Copy button render only when `live` exists.
+- Drop the `MOCK` badge branch; keep "LIVE · SCHWAB" only when `live` is set.
+
+`planResult` and `resultToText`'s dependency on the mock shape stay untouched; the export in `mock/data.ts` can remain (used by nothing else after this change, but out of scope to delete).
+
+### Files touched
+
+- `src/lib/profile-levels.ts` — export + `getPriorRthProfile`.
+- `src/lib/use-tpo-profile.ts` — new.
+- `src/components/charts/TpoProfile.tsx` — prop/hook rewrite.
+- `src/routes/index.tsx` — pass symbol prop; drop mock plan-result fallback.
+- `src/routes/analysis.tsx` — pass through default.
+- `src/lib/mock/data.ts` — remove now-dead `tpoRows` / `tpoStats`.
 
 ### Verification
 
-Re-run today's NQ plan against the same bars:
-
-- Anchor 29,176.75 → nearest level is 29,210 (naked POC) → **pivot = 29,210**.
-- 29,323.75 (VAL) drops into the upside ladder as T1↑ / T2↑ depending on the 80pt skip rule.
-- 29,502.50 remains a valid upside target (>80pt from 29,323.75).
-- ES: rerun and confirm pivot lands on whichever level (VAH/POC/VAL/H/L/naked POC) is nearest to the current anchor — you mentioned 7,529.50 is the expected value; that will be true iff 7,529.50 is one of the collected structural levels and is closer to the ES anchor than any other. If it's not appearing, the follow-up is to check whether it's being computed at all (naked POC scan window, tick rounding).
-
-No schema, RLS, or route changes.
+- Load `/` on ES: TPO panel POC/VAH/VAL match the chart's yellow/green/red rays; toggle to NQ and confirm the profile updates within one poll (≤60 s).
+- Load `/analysis`: TPO shows live ES letters, not the 6080-area mock prints.
+- Unauth or no saved plan on `/`: Plan Results shows the empty-state message, no fake "T3↓ 5988: ❌ Missed" grid.
+- After `generateDailyPlan` + `computePlanResultsFn`: card fills with live results and shows the `LIVE · SCHWAB` chip.
