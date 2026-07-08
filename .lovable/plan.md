@@ -1,64 +1,57 @@
-## Two fixes in `src/routes/index.tsx`
+## Fix: pivot should be the closest structural level to the current price
 
-### 1. Upside target sequence — display T1 → T2 → T3 (currently reversed)
+### Problem
 
-Today the Discord-format block renders the upside line as:
-
-```
-T3↑ 6420  >>  T2↑ 6410  >>  T1↑ 6400
-Daily Pivot: 6390 / Now trading at 6390
-T1↓ 6380  >>  T2↓ 6370  >>  T3↓ 6360
-```
-
-You want the upside to read the same direction as the downside — nearest target first, farthest last:
-
-```
-T1↑ 6400  >>  T2↑ 6410  >>  T3↑ 6420
-Daily Pivot: 6390 / Now trading at 6390
-T1↓ 6380  >>  T2↓ 6370  >>  T3↓ 6360
-```
-
-Change is one line inside `DailyPlanCard` (~line 270):
-
-```tsx
-<span className="text-bull">{`T1↑ ${fmtPrice(p.t1Up)} >> T2↑ ${fmtPrice(p.t2Up)} >> T3↑ ${fmtPrice(p.t3Up)}`}</span>
-```
-
-The `LevelRail` rows (top-to-bottom T3↑, T2↑, T1↑, Pivot, T1↓, T2↓, T3↓) stay unchanged — that layout is spatial (higher price = higher on screen) and is correct as-is. Underlying plan generation (`plan-generator.ts` → T1 is the closest structural level above/below pivot, T2 next, T3 farthest) is already correct; this is purely a display order fix for the copy-paste block.
-
-### 2. "Daily Pivot" and "Now trading at" always match — why, and the fix
-
-**Why they match today:** in `PlanPage` we hydrate the view with
+Today `generatePlanFromBars` picks pivot from only prior-session `{VAH, POC, VAL}`:
 
 ```ts
-setPlan(rowToView(r.plan, Number(r.plan.pivot)));   // 3 call sites
+const pivotRef = structural.reduce((best, cur) =>
+  Math.abs(cur.price - anchor) < Math.abs(best.price - anchor) ? cur : best,
+);
 ```
 
-The second argument is the "now" price. It was stubbed to `pivot` and never replaced with a live quote, so the "Now trading at" number is literally the pivot. It is not reading from Schwab.
+In the NQ example the anchor is 29,176.75. A naked 30m POC sits at 29,210 (much closer), but the algorithm ignores it and picks VAL 29,323.75 — so 29,210 ends up as T1↓ instead of pivot.
 
-**Fix:** feed the live last price from the existing Schwab-backed hook `useEsFeed` (already used by `EsChartPanel`, already switched to Schwab in the earlier change). Add in `PlanPage`:
+### Change (one file: `src/lib/plan-generator.ts`)
+
+Widen the pivot candidate pool to every structural level we already collect, then pick the nearest to `anchor`:
 
 ```ts
-import { useEsFeed } from "@/lib/use-es-feed";
+const pivotPool = [
+  tpo.vah, tpo.poc, tpo.val,
+  priorHigh, priorLow,
+  ...nakedStructs.map(s => s.price),   // naked H/L/VAH/POC/VAL, last 25 sess
+  ...nakedUniq,                        // naked 30m POCs, last 25 sess
+].map(roundTick);
 
-const { lastPrice } = useEsFeed("1m", SYMBOL_ROOTS[symbolId]); // "/ES" or "/NQ"
+const pivot = pivotPool.reduce((best, cur) =>
+  Math.abs(cur - anchor) < Math.abs(best - anchor) ? cur : best
+);
 ```
 
-(If `useEsFeed` doesn't already surface `lastPrice`, add a derived `lastPrice = bars.at(-1)?.close` selector in that hook — no new network calls.)
-
-Then keep the plan row in state as the raw row and derive `PlanView` on render:
+Then the target pool becomes every remaining structural level (exclude only `pivot`), split above/below and fed to the existing `pickTargets` (which already enforces the 8pt / 80pt `MIN_GAP` skip logic):
 
 ```ts
-const [planRow, setPlanRow] = useState<DailyPlanRow | null>(null);
-const plan = planRow ? rowToView(planRow, lastPrice ?? Number(planRow.pivot)) : null;
+const remaining = uniq(pivotPool.filter(p => p !== pivot));
+const above = remaining.filter(p => p > pivot).sort((a, b) => a - b);
+const below = remaining.filter(p => p < pivot).sort((a, b) => b - a);
 ```
 
-Replace the three `setPlan(rowToView(..., Number(...pivot)))` call sites with `setPlanRow(...)`. Result: "Now trading at" updates in real time from the same Schwab stream the chart uses, and only falls back to the pivot number when the stream hasn't produced a tick yet (initial mount, after-hours, reconnect).
+`pickTargets` already falls back to prior H/L + ¼·VA extensions when the structural pool runs out, so extension behavior is unchanged.
 
-No changes to `plan-generator.ts`, `plans.functions.ts`, or the DB schema.
+### Downstream
+
+- `pivotRef.name` is used only in the context string (`"...pivot 29323.75 (VAL)"`). Since pivot can now be any type (H, L, VAH, POC, VAL, 30m POC), tag it generically — either drop the `(VAL)` suffix or label it by matched source (e.g. `(naked POC)`). Small cosmetic tweak in the two `biasNote` template strings.
+- `PlanView` / `rowToView` / DB schema / Discord format / `LevelRail`: no changes. They only read `pivot` as a number.
+- Live "Now trading at" already flows from `useEsFeed` (previous fix) — unrelated.
 
 ### Verification
 
-- Open `/` on both ES and NQ, confirm upside line reads `T1↑ … >> T2↑ … >> T3↑ …` with ascending prices.
-- Watch "Now trading at" during RTH — it should drift while "Daily Pivot" stays fixed.
-- Copy the Discord block and confirm the plain-text `planToText` output (in `src/lib/format.ts` or wherever it lives) matches the new order; update that helper too if it hardcodes the reversed sequence.
+Re-run today's NQ plan against the same bars:
+
+- Anchor 29,176.75 → nearest level is 29,210 (naked POC) → **pivot = 29,210**.
+- 29,323.75 (VAL) drops into the upside ladder as T1↑ / T2↑ depending on the 80pt skip rule.
+- 29,502.50 remains a valid upside target (>80pt from 29,323.75).
+- ES: rerun and confirm pivot lands on whichever level (VAH/POC/VAL/H/L/naked POC) is nearest to the current anchor — you mentioned 7,529.50 is the expected value; that will be true iff 7,529.50 is one of the collected structural levels and is closer to the ES anchor than any other. If it's not appearing, the follow-up is to check whether it's being computed at all (naked POC scan window, tick rounding).
+
+No schema, RLS, or route changes.
