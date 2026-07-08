@@ -291,10 +291,10 @@ export function generatePlanFromBars(
 
   const biasNote =
     bias === "Bullish"
-      ? `Anchor ${anchor.toFixed(2)} above prior VAH ${tpo.vah.toFixed(2)} — lean long while holding pivot ${pivot.toFixed(2)} (${pivotRef.name}).`
+      ? `Anchor ${anchor.toFixed(2)} above prior VAH ${tpo.vah.toFixed(2)} — lean long while holding pivot ${pivot.toFixed(2)} (${pivotLabel}).`
       : bias === "Bearish"
-        ? `Anchor ${anchor.toFixed(2)} below prior VAL ${tpo.val.toFixed(2)} — lean short while capped by pivot ${pivot.toFixed(2)} (${pivotRef.name}).`
-        : `Anchor ${anchor.toFixed(2)} inside prior value (${tpo.val.toFixed(2)}–${tpo.vah.toFixed(2)}) — rotational around pivot ${pivot.toFixed(2)} (${pivotRef.name}).`;
+        ? `Anchor ${anchor.toFixed(2)} below prior VAL ${tpo.val.toFixed(2)} — lean short while capped by pivot ${pivot.toFixed(2)} (${pivotLabel}).`
+        : `Anchor ${anchor.toFixed(2)} inside prior value (${tpo.val.toFixed(2)}–${tpo.vah.toFixed(2)}) — rotational around pivot ${pivot.toFixed(2)} (${pivotLabel}).`;
   const nakedNote = nakedUniq.length
     ? ` Naked 30m POCs (last ${LOOKBACK} sess) as magnets: ${nakedUniq.slice(0, 6).map(p => p.toFixed(2)).join(", ")}.`
     : "";
