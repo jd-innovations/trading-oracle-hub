@@ -378,11 +378,7 @@ function PlanResultsCard({ authed, symbolId }: { authed: boolean; symbolId: Symb
     return (
       <Panel title="Plan Results" right={<div className="flex items-center gap-2">{gradeBtn}</div>}>
         <p className="text-xs text-muted-foreground">
-          {err
-            ? err
-            : authed
-              ? "Grading… once a plan is saved for the day, results appear here after the RTH session."
-              : "Connect your Schwab broker and generate a plan to grade results here."}
+          {err ?? "No prior plan to grade yet. Generate a plan today; results appear here tomorrow after RTH closes."}
         </p>
       </Panel>
     );
