@@ -166,36 +166,8 @@ export const spxCandles = genCandles(7, 6085).map((c) => ({
   close: +(c.close + 4).toFixed(2),
 }));
 
-// TPO rows — 30 min brackets A..M
-export interface TpoRow {
-  price: number;
-  letters: string;
-}
-export const tpoRows: TpoRow[] = (() => {
-  const rows: TpoRow[] = [];
-  const letters = "ABCDEFGHIJKLM";
-  const top = 6098;
-  const bottom = 6062;
-  const step = 0.25;
-  let s = 1337;
-  const rand = () => {
-    s = (s * 9301 + 49297) % 233280;
-    return s / 233280;
-  };
-  for (let p = top; p >= bottom; p -= step) {
-    let l = "";
-    for (let i = 0; i < letters.length; i++) {
-      // bell-ish around 6080
-      const dist = Math.abs(p - 6080.5);
-      const prob = Math.max(0, 1 - dist / 12 - i * 0.03);
-      if (rand() < prob * 0.55) l += letters[i];
-    }
-    if (l) rows.push({ price: +p.toFixed(2), letters: l });
-  }
-  return rows;
-})();
 
-export const tpoStats = { poc: 6080.5, vah: 6088.25, val: 6072.75 };
+
 
 export interface NakedLevel {
   label: string;
