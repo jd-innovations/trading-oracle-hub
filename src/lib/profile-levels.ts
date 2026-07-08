@@ -379,3 +379,58 @@ export function computeProfileLevels(
 
   return levels;
 }
+
+// ---------------------------------------------------------------------------
+// Public helper: prior-RTH TPO profile suitable for the sidebar TpoProfile UI.
+// Returns per-price-bin bracket letters (A, B, C, ...) plus POC / VAH / VAL.
+// ---------------------------------------------------------------------------
+
+export interface PriorRthProfileRow {
+  price: number;
+  letters: string;
+}
+export interface PriorRthProfile {
+  date: string;
+  rows: PriorRthProfileRow[];
+  poc: number;
+  vah: number;
+  val: number;
+}
+
+export function getPriorRthProfile(bars: Candle[]): PriorRthProfile | null {
+  const sessions = groupRthSessions(bars);
+  if (!sessions.length) return null;
+  // Prefer the last COMPLETED session; if only one exists, use it.
+  const session = sessions.length > 1 ? sessions[sessions.length - 2] : sessions[0];
+  const stats = computeTpoProfile(session.bars);
+  if (!stats) return null;
+
+  // Rebuild bin -> ordered bracket indices for letter rendering.
+  const sessionStart = session.bars[0].time;
+  const binToBrackets = new Map<number, Set<number>>();
+  for (const bar of session.bars) {
+    const bracketIdx = Math.floor((bar.time - sessionStart) / (BRACKET_MIN * 60));
+    const lo = priceToBin(bar.low);
+    const hi = priceToBin(bar.high);
+    for (let b = lo; b <= hi; b++) {
+      let s = binToBrackets.get(b);
+      if (!s) { s = new Set(); binToBrackets.set(b, s); }
+      s.add(bracketIdx);
+    }
+  }
+  const bins = [...binToBrackets.keys()].sort((a, b) => b - a); // high price first
+  const rows: PriorRthProfileRow[] = bins.map(bin => {
+    const idxs = [...binToBrackets.get(bin)!].sort((a, b) => a - b);
+    const letters = idxs.map(i => String.fromCharCode(65 + (i % 26))).join("");
+    return { price: bin * TICK, letters };
+  });
+
+  return {
+    date: session.dayKey,
+    rows,
+    poc: stats.poc,
+    vah: stats.vah,
+    val: stats.val,
+  };
+}
+
