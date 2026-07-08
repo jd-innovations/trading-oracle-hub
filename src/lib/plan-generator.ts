@@ -221,29 +221,34 @@ export function generatePlanFromBars(
   }
   const nakedUniq = [...new Set(nakedPocs30m)].sort((a, b) => a - b);
 
-  // Pivot = closest of TODAY's prior-session {VAH, POC, VAL} to anchor.
-  const structural: Array<{ name: "VAH" | "POC" | "VAL"; price: number }> = [
-    { name: "VAH", price: tpo.vah },
-    { name: "POC", price: tpo.poc },
-    { name: "VAL", price: tpo.val },
-  ];
-  const pivotRef = structural.reduce((best, cur) =>
-    Math.abs(cur.price - anchor) < Math.abs(best.price - anchor) ? cur : best,
-  );
-  const pivot = roundTick(pivotRef.price);
-
-  // Full structural candidate pool — every naked level across the 25-session
-  // window plus today's prior-session refs. Naked 30m POCs included.
-  const structuralPool = [
-    ...structural.filter(s => s.name !== pivotRef.name).map(s => s.price),
-    priorHigh,
-    priorLow,
-    ...nakedStructs.map(s => s.price),
-    ...nakedUniq,
+  // Pivot = closest structural level (any type) to the live anchor.
+  // Pool: today's prior-session VAH/POC/VAL + prior H/L + naked H/L/VAH/POC/VAL
+  // from the last 25 sessions + naked 30m POCs.
+  const roundedTpo = { VAH: roundTick(tpo.vah), POC: roundTick(tpo.poc), VAL: roundTick(tpo.val) };
+  const pivotPool: number[] = [
+    roundedTpo.VAH, roundedTpo.POC, roundedTpo.VAL,
+    roundTick(priorHigh), roundTick(priorLow),
+    ...nakedStructs.map(s => roundTick(s.price)),
+    ...nakedPocs30m.map(roundTick),
   ];
   const uniq = (xs: number[]) => [...new Set(xs.map(roundTick))];
-  const above = uniq(structuralPool.filter(p => p > pivot)).sort((a, b) => a - b);
-  const below = uniq(structuralPool.filter(p => p < pivot)).sort((a, b) => b - a);
+  const pivotCandidates = uniq(pivotPool);
+  const pivot = pivotCandidates.reduce((best, cur) =>
+    Math.abs(cur - anchor) < Math.abs(best - anchor) ? cur : best,
+  );
+  // Label pivot by source, best-effort (context string only).
+  const nakedStructMatch = nakedStructs.find(s => roundTick(s.price) === pivot);
+  const pivotLabel: string =
+    pivot === roundedTpo.VAH ? "VAH" :
+    pivot === roundedTpo.POC ? "POC" :
+    pivot === roundedTpo.VAL ? "VAL" :
+    pivot === roundTick(priorHigh) ? "prior H" :
+    pivot === roundTick(priorLow) ? "prior L" :
+    nakedStructMatch ? `naked ${nakedStructMatch.kind}` :
+    "naked POC";
+
+  const above = pivotCandidates.filter(p => p > pivot).sort((a, b) => a - b);
+  const below = pivotCandidates.filter(p => p < pivot).sort((a, b) => b - a);
 
 
   function pickTargets(structuralCandidates: number[], dir: 1 | -1): number[] {
