@@ -1,66 +1,54 @@
-## Wire live data into TPO Profile + tighten Plan Results
+## Grade the previous day's plan; TPO shows yesterday's RTH session
 
-Two panels still show mock data. Plan Results already runs a live server fn (`computePlanResultsFn`) but silently falls back to `mock/data.planResult` when there's no plan or no auth — user reads a stale mock and thinks it's live. TpoProfile is 100% mock (`tpoRows`, `tpoStats` from `src/lib/mock/data.ts`).
+### 1. Plan Results → previous session, not today
 
-### 1. TpoProfile → live TPO from prior RTH session
+`computePlanResultsFn` currently picks the newest saved plan (which is today's, auto-generated on load) and tries to grade it. Today's RTH is usually incomplete, so it returns `no_session_bars` or half-formed hits.
 
-Reuse the existing profile math (`computeTpoProfile` is already in `src/lib/profile-levels.ts`, exercised by the chart overlay) instead of shipping a second copy.
+**Change (`src/lib/plans.functions.ts`, `computePlanResultsFn`):**
 
-**a. `src/lib/profile-levels.ts`**
-- Export `computeTpoProfile` and the internal `groupRthSessions` helper so consumers can pull the prior-RTH profile without recomputing sessions. `TpoProfile` (interface) is already declared — export it too.
-- Add a small helper `getPriorRthProfile(bars: Candle[]): { rows: {price:number; letters:string}[]; poc:number; vah:number; val:number } | null` that: groups sessions, picks the last completed RTH session, and returns the per-price-bin bracket letters (A, B, C, …) plus POC/VAH/VAL. Bracket letters come from the same 30-min bucketing already used inside `computeTpoProfile`; we just also keep the mapping `bin -> sorted bracket indices` and render `String.fromCharCode(65 + idx)`.
-
-**b. New hook `src/lib/use-tpo-profile.ts`**
 ```ts
-export function useTpoProfile(symbol: string) {
-  const { base1m, source } = useEsFeed("2m", symbol);
-  const profile = useMemo(() => getPriorRthProfile(base1m), [base1m]);
-  return { profile, source };
-}
-```
-No new network calls — piggybacks on `useEsFeed`'s 1-minute Schwab pull that the chart already runs.
+// Compute today's ET date once.
+const todayET = new Date(Date.now() - 4 * 3600 * 1000).toISOString().slice(0, 10);
 
-**c. `src/components/charts/TpoProfile.tsx`** — rewrite to render from props:
+let q = supabaseAdmin.from("daily_plans").select("*").eq("symbol", sym.id);
+if (data?.planDate) {
+  q = q.eq("plan_date", data.planDate);
+} else {
+  q = q.lt("plan_date", todayET);            // <-- previous sessions only
+}
+const { data: rows } = await q.order("plan_date", { ascending: false }).limit(1);
+```
+
+Everything downstream stays the same — it will fetch a 10-day Schwab window and grade the picked plan's `plan_date`.
+
+**Panel copy (`src/routes/index.tsx`, `PlanResultsCard`):**
+- Title stays `Plan Results — ${date}`. When the graded date is not today, the copy is already accurate.
+- Empty-state text becomes: *"No prior plan to grade yet. Generate a plan today; results appear here tomorrow after RTH closes."* (drop the `authed` branch — irrelevant on server-graded flow).
+
+### 2. TPO Profile → yesterday's RTH, never today's partial
+
+`getPriorRthProfile` picks `sessions[length-2]` when >1 session exists. During RTH it works (today is last, yesterday is `length-2`). Before 09:30 ET or on non-trading days it picks the wrong day (today has no bars → yesterday becomes `length-1` and we return day-before-yesterday).
+
+**Change (`src/lib/profile-levels.ts`, `getPriorRthProfile`):**
+
 ```ts
-interface Props {
-  compact?: boolean;
-  symbol?: string;           // "/ES" | "/NQ"
-}
+const todayET = new Date(Date.now() - 4 * 3600 * 1000).toISOString().slice(0, 10);
+const priorSessions = sessions.filter(s => s.dayKey < todayET);
+if (!priorSessions.length) return null;
+const session = priorSessions[priorSessions.length - 1];
 ```
-Inside, call `useTpoProfile(symbol ?? "/ES")`. Show:
-- Header row VAH/POC/VAL from live stats (fall back to `—` when `profile` is null).
-- Empty state: "Waiting for Schwab bars…" when `source === "mock"` or no session yet.
-- Rows: iterate `profile.rows` sorted by price desc (same layout as today).
 
-**d. Update the two call sites:**
-- `src/routes/index.tsx` line 227: `<TpoProfile compact symbol={SYMBOL_ROOTS[symbolId]} />` — follows the ES/NQ toggle.
-- `src/routes/analysis.tsx` line 23: `<TpoProfile />` for now (defaults to /ES). Follow-up if analysis grows a symbol switcher.
-
-**e. Delete `tpoRows` and `tpoStats` from `src/lib/mock/data.ts`** — only TpoProfile used them.
-
-### 2. Plan Results — drop mock fallback
-
-Panel currently reads `const r = live ?? planResult` and stamps "MOCK" when unauthed / no saved plan. Change so the panel reflects reality:
-
-- Remove the `planResult` import in `src/routes/index.tsx` and the `?? planResult` fallback.
-- When `!live`: render an empty state inside the Panel with the `err` message (or a neutral "Generate a plan first, then grade it." when there's no error). Keep the "Grade Plan" button.
-- Score chip and Copy button render only when `live` exists.
-- Drop the `MOCK` badge branch; keep "LIVE · SCHWAB" only when `live` is set.
-
-`planResult` and `resultToText`'s dependency on the mock shape stay untouched; the export in `mock/data.ts` can remain (used by nothing else after this change, but out of scope to delete).
+Header label in `TpoProfile.tsx` stays `TPO · RTH ${profile.date}` so the user always sees which date is rendered.
 
 ### Files touched
 
-- `src/lib/profile-levels.ts` — export + `getPriorRthProfile`.
-- `src/lib/use-tpo-profile.ts` — new.
-- `src/components/charts/TpoProfile.tsx` — prop/hook rewrite.
-- `src/routes/index.tsx` — pass symbol prop; drop mock plan-result fallback.
-- `src/routes/analysis.tsx` — pass through default.
-- `src/lib/mock/data.ts` — remove now-dead `tpoRows` / `tpoStats`.
+- `src/lib/plans.functions.ts` — `.lt("plan_date", todayET)` when caller doesn't pin a date.
+- `src/lib/profile-levels.ts` — pick most recent session strictly before today.
+- `src/routes/index.tsx` — reword empty-state in `PlanResultsCard`.
 
 ### Verification
 
-- Load `/` on ES: TPO panel POC/VAH/VAL match the chart's yellow/green/red rays; toggle to NQ and confirm the profile updates within one poll (≤60 s).
-- Load `/analysis`: TPO shows live ES letters, not the 6080-area mock prints.
-- Unauth or no saved plan on `/`: Plan Results shows the empty-state message, no fake "T3↓ 5988: ❌ Missed" grid.
-- After `generateDailyPlan` + `computePlanResultsFn`: card fills with live results and shows the `LIVE · SCHWAB` chip.
+- Load `/` before 09:30 ET: TPO shows yesterday (e.g. 2026-07-07), not the day before.
+- Load `/` mid-RTH: TPO still shows yesterday.
+- Plan Results grades the most recent past-day plan (title date < today). Score/targets reflect a completed session.
+- On day 1 of using the app (no prior plans): Plan Results shows the empty-state copy.
