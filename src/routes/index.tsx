@@ -5,7 +5,6 @@ import { useServerFn } from "@tanstack/react-start";
 import { AppShell, Panel } from "@/components/layout/AppShell";
 import { EsChartPanel } from "@/components/charts/EsChartPanel";
 import { TpoProfile } from "@/components/charts/TpoProfile";
-import { planResult } from "@/lib/mock/data";
 import { fmtPrice, planToText, resultToText } from "@/lib/format";
 import { generateDailyPlan, getLatestPlan, computePlanResultsFn, type DailyPlanRow } from "@/lib/plans.functions";
 import type { PlanResultComputed } from "@/lib/plan-results";
@@ -224,7 +223,7 @@ function PlanPage() {
               </ul>
             </Panel>
           )}
-          <Panel title="Session TPO (Live)"><TpoProfile compact /></Panel>
+          <Panel title="Session TPO (Live)"><TpoProfile compact symbol={SYMBOL_ROOTS[symbolId]} /></Panel>
         </div>
       </div>
       <div className="mt-3">
@@ -361,11 +360,35 @@ function PlanResultsCard({ authed, symbolId }: { authed: boolean; symbolId: Symb
 
 
 
-  const r = live ?? planResult;
-  const isLive = !!live;
-  const date = isLive ? (liveDate ?? r.date) : r.date;
   const mark = (b: boolean) => (b ? "✅" : "❌");
+  const date = liveDate ?? live?.date ?? "";
 
+  const gradeBtn = (
+    <button
+      onClick={compute}
+      disabled={busy}
+      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-2 py-1 text-[11px] font-medium hover:bg-muted disabled:opacity-50"
+    >
+      <RefreshCw className={`h-3 w-3 ${busy ? "animate-spin" : ""}`} />
+      {busy ? "Grading..." : "Grade Plan"}
+    </button>
+  );
+
+  if (!live) {
+    return (
+      <Panel title="Plan Results" right={<div className="flex items-center gap-2">{gradeBtn}</div>}>
+        <p className="text-xs text-muted-foreground">
+          {err
+            ? err
+            : authed
+              ? "Grading… once a plan is saved for the day, results appear here after the RTH session."
+              : "Connect your Schwab broker and generate a plan to grade results here."}
+        </p>
+      </Panel>
+    );
+  }
+
+  const r = live;
   const resultObj = {
     date,
     bias: r.bias,
@@ -381,28 +404,13 @@ function PlanResultsCard({ authed, symbolId }: { authed: boolean; symbolId: Symb
 
   return (
     <Panel
-      title={`Plan Results — ${isLive ? date : "Previous Session"}`}
+      title={`Plan Results — ${date}`}
       right={
         <div className="flex items-center gap-2">
-          <span
-            className={`mono rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
-              isLive
-                ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-500"
-                : "border-border bg-surface-2 text-muted-foreground"
-            }`}
-          >
-            {isLive ? "LIVE · SCHWAB" : "MOCK"}
+          <span className="mono rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-500">
+            LIVE · SCHWAB
           </span>
-          {true && (
-            <button
-              onClick={compute}
-              disabled={busy}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-2 py-1 text-[11px] font-medium hover:bg-muted disabled:opacity-50"
-            >
-              <RefreshCw className={`h-3 w-3 ${busy ? "animate-spin" : ""}`} />
-              {busy ? "Grading..." : "Grade Plan"}
-            </button>
-          )}
+          {gradeBtn}
           <span className="mono rounded-md border border-border bg-surface-2 px-2 py-0.5 text-xs">
             Score {r.score}/100
           </span>
