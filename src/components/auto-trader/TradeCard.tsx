@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
-import { Copy, Check, Power, RotateCcw } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Copy, Check, Power, RotateCcw, Send, BellOff, Bell } from "lucide-react";
 import { Panel } from "@/components/layout/AppShell";
 import { fmtPrice } from "@/lib/format";
 import { useAutoTrader } from "@/lib/auto-trader/use-auto-trader";
+import { loadAutoPostTrades, saveAutoPostTrades, sendToDiscord } from "@/lib/discord-client";
 import type { DailyPlanRow } from "@/lib/plans.functions";
 import type { Candle } from "@/lib/chart-utils";
 
@@ -46,6 +47,8 @@ export function TradeCard({
 }) {
   const { state, enabled, setEnabled, reset, disabledReason } = useAutoTrader(plan, bars, symbol);
   const [copied, setCopied] = useState(false);
+  const [autoPost, setAutoPost] = useState<boolean>(() => loadAutoPostTrades());
+  useEffect(() => { saveAutoPostTrades(autoPost); }, [autoPost]);
 
   const micro = MICRO[symbol];
   const isNeutral = state?.mode === "neutral";
@@ -125,11 +128,31 @@ export function TradeCard({
         {enabled ? "On" : "Off"}
       </button>
       <button
+        onClick={() => setAutoPost(!autoPost)}
+        className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider hover:text-foreground ${
+          autoPost
+            ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-500"
+            : "border-border bg-surface-2 text-muted-foreground"
+        }`}
+        title={autoPost ? "Auto-post events to Discord (on)" : "Auto-post events to Discord (off)"}
+      >
+        {autoPost ? <Bell className="h-3 w-3" /> : <BellOff className="h-3 w-3" />}
+        Auto
+      </button>
+      <button
         onClick={reset}
         className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-2 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
         title="Reset day"
       >
         <RotateCcw className="h-3 w-3" /> Reset
+      </button>
+      <button
+        onClick={() => sendToDiscord(discordText, { label: "Trade" })}
+        disabled={!discordText}
+        className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-2 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground disabled:opacity-40"
+        title="Post current trade summary to Discord"
+      >
+        <Send className="h-3 w-3" /> Post
       </button>
       <button
         onClick={copy}
