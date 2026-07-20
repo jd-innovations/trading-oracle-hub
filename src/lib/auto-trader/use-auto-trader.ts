@@ -63,12 +63,42 @@ function hydrate(sym: SymbolId, date: string): TradeState | null {
   } catch { return null; }
 }
 
+export interface EntryPoolDiag {
+  side: "long" | "short";
+  label: string;
+  price: number;
+  /** Positive = distance still to travel; ≤ 0 = level already tagged. */
+  deltaPts: number;
+  closestPrice: number;
+  closestTime?: number;
+}
+
+export interface AutoTraderDiag {
+  planDate: string;
+  symbol: SymbolId;
+  barsSeen: number;
+  rthBarsSeen: number;
+  rejectedWrongDate: number;
+  firstBarEt?: number;
+  lastBarEt?: number;
+  pool: EntryPoolDiag[];
+}
+
 export interface UseAutoTraderResult {
   state: TradeState | null;
   enabled: boolean;
   setEnabled: (v: boolean) => void;
   reset: () => void;
   disabledReason: string | null;
+  diag: AutoTraderDiag | null;
+}
+
+function etDateKey(t: number): string {
+  const d = new Date(t * 1000);
+  // ET is UTC-4 in DST (Jul 2026 is DST).
+  const shifted = new Date((t - 4 * 3600) * 1000);
+  void d;
+  return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, "0")}-${String(shifted.getUTCDate()).padStart(2, "0")}`;
 }
 
 export function useAutoTrader(
@@ -80,8 +110,6 @@ export function useAutoTrader(
   const [state, setState] = useState<TradeState | null>(null);
   const stateRef = useRef<TradeState | null>(null);
   stateRef.current = state;
-  // Track how many events we've already posted per (symbol,date) so a rehydrate
-  // doesn't re-fire old events and so we only post genuinely new ones.
   const postedCountRef = useRef<number>(0);
 
   const disabledReason = useMemo(() => {
@@ -104,15 +132,17 @@ export function useAutoTrader(
     toast("Auto-trader reset for the day.");
   };
 
-  // (Re)initialize when plan/symbol changes.
+  // (Re)initialize when plan/symbol changes. Also guard against symbol mismatch on hydrate.
   useEffect(() => {
     if (!plan) { setState(null); return; }
     const hy = hydrate(symbol, plan.plan_date);
-    if (hy && hy.planDate === plan.plan_date) {
+    if (hy && hy.planDate === plan.plan_date && hy.symbol === symbol) {
       setState(hy);
-      // Treat rehydrated events as already-posted so a page refresh doesn't re-send.
       postedCountRef.current = hy.events.length;
     } else {
+      if (hy && hy.symbol !== symbol) {
+        console.warn(`[auto-trader] hydrate symbol mismatch: stored=${hy.symbol} prop=${symbol} — resetting`);
+      }
       const fresh = initialState(plan, symbol);
       setState(fresh);
       persist(fresh);
@@ -129,11 +159,23 @@ export function useAutoTrader(
     if (!bars.length) return;
 
     const autoPost = loadAutoPostTrades();
+    const dbg = debugOn();
     let next = cur;
     let changed = false;
     for (const b of bars) {
       if (b.time <= next.lastBarTime) continue;
       const bar: Bar = { time: b.time, open: b.open, high: b.high, low: b.low, close: b.close };
+
+      if (dbg && isRthBar(bar.time) && etDateKey(bar.time) === next.planDate) {
+        const ladder = buildLadder(plan);
+        const info = entryPool(ladder, next.mode, next.side, next.armSide);
+        const pool = info.levels.concat(info.shortLevels ?? []);
+        const poolStr = pool.map((l) => `${l.label}:${l.price.toFixed(2)}`).join(",");
+        console.log(
+          `[auto-trader] ${fmtEt(bar.time)} phase=${next.phase} side=${next.side ?? "-"} arm=${next.armSide} O=${bar.open.toFixed(2)} H=${bar.high.toFixed(2)} L=${bar.low.toFixed(2)} C=${bar.close.toFixed(2)} pool=[${poolStr}]`,
+        );
+      }
+
       next = advance(next, plan, bar);
     }
     if (next !== cur) {
@@ -151,7 +193,6 @@ export function useAutoTrader(
         console.info(`[auto-trader] event autoPost=${autoPost} kind=${ev.kind}`, ev.note);
         if (autoPost) {
           const line = `${eventEmoji(ev.kind)} **Auto-Trader | ${symbol}** · ${fmtEt(ev.time)} ET · ${ev.note ?? ev.kind}`;
-          // Non-silent while we diagnose: success toasts confirm the round-trip.
           sendToDiscord(line, { silent: false, label: "Auto-trader" });
         }
       }
@@ -163,5 +204,85 @@ export function useAutoTrader(
     }
   }, [bars, plan, enabled, symbol]);
 
-  return { state, enabled, setEnabled, reset, disabledReason };
+  // Live diagnostic: closest approach per pool level today.
+  const diag = useMemo<AutoTraderDiag | null>(() => {
+    if (!plan || !state) return null;
+    const ladder = buildLadder(plan);
+    const info = entryPool(ladder, state.mode, state.side, state.armSide);
+    const longPool: { side: "long"; level: { price: number; label: string } }[] =
+      (info.side === "long" || info.side === "either")
+        ? (info.side === "either" ? info.levels : info.levels).map((l) => ({ side: "long", level: l }))
+        : [];
+    const shortPool: { side: "short"; level: { price: number; label: string } }[] =
+      info.side === "short"
+        ? info.levels.map((l) => ({ side: "short", level: l }))
+        : info.side === "either" && info.shortLevels
+          ? info.shortLevels.map((l) => ({ side: "short", level: l }))
+          : [];
+    const all = [...longPool, ...shortPool];
+
+    // Init closest with +Infinity delta.
+    const closest = new Map<string, { deltaPts: number; closestPrice: number; time?: number; side: "long" | "short"; label: string; price: number }>();
+    for (const p of all) {
+      closest.set(p.level.label + ":" + p.side, {
+        deltaPts: Number.POSITIVE_INFINITY,
+        closestPrice: NaN,
+        side: p.side,
+        label: p.level.label,
+        price: p.level.price,
+      });
+    }
+
+    let barsSeen = 0;
+    let rthBarsSeen = 0;
+    let rejectedWrongDate = 0;
+    let firstEt: number | undefined;
+    let lastEt: number | undefined;
+    for (const b of bars) {
+      barsSeen++;
+      if (!isRthBar(b.time)) continue;
+      if (etDateKey(b.time) !== state.planDate) {
+        rejectedWrongDate++;
+        continue;
+      }
+      rthBarsSeen++;
+      if (firstEt == null) firstEt = b.time;
+      lastEt = b.time;
+      for (const p of all) {
+        const key = p.level.label + ":" + p.side;
+        const rec = closest.get(key)!;
+        if (p.side === "long") {
+          const delta = b.low - p.level.price;
+          if (delta < rec.deltaPts) { rec.deltaPts = delta; rec.closestPrice = b.low; rec.time = b.time; }
+        } else {
+          const delta = p.level.price - b.high;
+          if (delta < rec.deltaPts) { rec.deltaPts = delta; rec.closestPrice = b.high; rec.time = b.time; }
+        }
+      }
+    }
+
+    const poolDiag: EntryPoolDiag[] = Array.from(closest.values())
+      .filter((r) => Number.isFinite(r.deltaPts))
+      .map((r) => ({
+        side: r.side,
+        label: r.label,
+        price: r.price,
+        deltaPts: r.deltaPts,
+        closestPrice: r.closestPrice,
+        closestTime: r.time,
+      }));
+
+    return {
+      planDate: state.planDate,
+      symbol,
+      barsSeen,
+      rthBarsSeen,
+      rejectedWrongDate,
+      firstBarEt: firstEt,
+      lastBarEt: lastEt,
+      pool: poolDiag,
+    };
+  }, [plan, state, bars, symbol]);
+
+  return { state, enabled, setEnabled, reset, disabledReason, diag };
 }
