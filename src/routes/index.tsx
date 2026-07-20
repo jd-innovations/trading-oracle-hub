@@ -5,6 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { AppShell, Panel } from "@/components/layout/AppShell";
 import { EsChartPanel } from "@/components/charts/EsChartPanel";
 import { TpoProfile } from "@/components/charts/TpoProfile";
+import { TradeCard } from "@/components/auto-trader/TradeCard";
 import { fmtPrice, planToText, resultToText } from "@/lib/format";
 import { generateDailyPlan, getLatestPlan, computePlanResultsFn, type DailyPlanRow } from "@/lib/plans.functions";
 import type { PlanResultComputed } from "@/lib/plan-results";
@@ -203,6 +204,7 @@ function PlanPage() {
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
         <div className="space-y-3 lg:col-span-2">
           <DailyPlanCard plan={plan} />
+          <TradeCard plan={planRow} bars={base1m} symbol={symbolId} livePrice={lastPrice} />
           <TargetsExplained plan={plan} />
           <EsChartPanel initialSymbol={symbolId} key={symbolId} />
         </div>
