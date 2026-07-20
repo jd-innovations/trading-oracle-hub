@@ -1,48 +1,50 @@
-## Problem
+## What we know
 
-Manual `Test` and `Post` buttons deliver to Discord fine, so the webhook + server fn are working. But when the auto-trader emits toasts (entry / scale / stop / target), `sendToDiscord(...)` is called with `{ silent: true }` and nothing arrives — and because it's silent, a failure toast is the only feedback we'd see, and you're not seeing one either.
+- Test event round-trips fine, so Discord + hook + toggle are healthy.
+- NQ plan generated and posted at 8:30, so `planRow` is present and `initialState` armed the machine.
+- Bars are Schwab 1m /NQ candles with `time` in seconds; `isRthBar` and the date-key gate are correct for July.
+- Entry rules today:
+  - **Bullish** → pool = `supportLevels` = Pivot + T1↓/T2↓/T3↓ only.
+  - **Bearish** → pool = `resistanceLevels` = Pivot + T1↑/T2↑/T3↑ only.
+  - **Neutral** → pool = T2↑/T3↑ (short) or T2↓/T3↓ (long); Pivot and T1 are intentionally excluded.
+- A bar fires an entry only if `bar.low <= level` (primary: bar also opens on the other side; fallback: any bar whose low crosses the level).
 
-That leaves three plausible causes:
+That means the two realistic reasons NQ never entered are:
 
-1. `sendToDiscord` never actually runs from inside the hook (e.g. `loadAutoPostTrades()` reads `"0"`, or the "new events" are from a rehydrated state so `newEvents.length === 0`, or the toasts you're seeing are stale from a prior mount).
-2. The call runs, the server fn returns 2xx from a stale/other webhook, and the message goes to a Discord channel you're not watching.
-3. The call runs, Discord rate-limits or 400s the payload, and the error toast is swallowed by `silent: true` being misapplied.
+1. **Correct-by-rules skip.** Bullish bias but NQ opened above Pivot and never pulled back to Pivot or below — or bearish and never rallied back to Pivot or above — or Neutral and price stayed inside T1↑/T1↓ all day. Nothing to fix; the rules did their job.
+2. **Real bug.** A qualifying bar existed (its low touched a pool level) but the state machine skipped it — e.g. bar-time gate rejected it, plan-date mismatch, `symbolId` on the card not matching the bars, or the pool selector picked the wrong side.
 
-We need signal before more code changes.
+Without per-bar signal we can't tell (1) from (2). The fix is to make the auto-trader *explain itself*, then act on what it says.
 
 ## Plan
 
-### 1. Add diagnostic instrumentation (temporary, easy to remove)
+### 1. Live "entry gate" panel on the Auto-Trader card (while ARMED)
 
-- `src/lib/discord-client.ts`
-  - Change `sendToDiscord` so `silent` only suppresses the **success** toast — **errors always toast** (they should today, verify).
-  - Add a `console.info("[discord] post →", label, contentPreview)` before the fetch, and `console.info("[discord] ok", label)` / `console.error("[discord] fail", label, err)` after.
-- `src/lib/discord.functions.ts`
-  - `console.log` the outbound length + first 80 chars server-side so `server-function-logs` shows whether the handler was reached.
-- `src/lib/auto-trader/use-auto-trader.ts`
-  - Log `[auto-trader] event autoPost=<bool> kind=<kind>` on every event, so we can confirm the branch is entered.
+Under the status pill, render a small diagnostic block that only shows while `phase === "armed"`:
 
-### 2. Add a "Test event" button on the Auto-Trader card
+- The active entry pool (from the ladder + current mode/side/armSide) with each level's price.
+- For each pool level, the **closest approach today**: `min(low - level)` for supports, `min(level - high)` for resistances, computed across today's RTH bars we've seen. Green when ≤ 0 (already tagged), amber otherwise, with the ET timestamp of the closest bar.
+- A one-liner reason: `"Waiting on pullback to <label> <price> — closest so far <closestPrice> @ HH:MM (Δ <n> pts)"`.
 
-A one-click path that reuses the exact same code that live events use (`sendToDiscord(line, { silent: true })` with a synthetic entry note) — proves the auto-trader → Discord bridge, independent of price action. If this works but real events don't, cause is (1). If this also silently fails, cause is (2) or (3) and we'll have server logs to confirm.
+If the closest approach is ≤ 0 for a level but no entry fired, that's a bug and we investigate; if every level's Δ stays positive, the day just didn't offer a setup (rule-correct).
 
-### 3. Make auto-posts non-silent by default until this is resolved
+### 2. One-line per-bar console trace behind a flag
 
-Flip `sendToDiscord` calls inside the hook to `silent: false` so every successful post also toasts "Posted to Discord · Auto-trader". You'll immediately see whether posts are happening and just not landing in your channel, vs. not being sent at all.
+New `localStorage` key `auto-trader:debug` (default off). When on, every RTH 1m bar prints a compact line: `[at] et HH:MM open/high/low/close · phase=<> side=<> pool=[label:price …] hit=<label?|none>`. Turn on for the NQ session tomorrow (or replay today's session if we can pull the bars), copy/paste the log and we'll see exactly what the state machine saw.
 
-### 4. Guard against stale rehydration
+### 3. Sanity-check the wiring while we're in there
 
-In `useAutoTrader`, mark all events present at hydrate time as "already posted" so a page refresh doesn't re-send old events; conversely, if a bar arrives that adds new events, we know for sure those are fresh and should post.
+- Assert `state.symbol === symbol` on every advance; if the card's `symbol` prop and the persisted state disagree, log a warning and reset (protects against stale localStorage from a prior ES session on the same date).
+- Assert the bar's ET date-key matches `planDate` — if the very first bar we see today is being rejected by the date gate we'll surface it as `date-mismatch: bar=2026-07-20, plan=2026-07-17` in the diagnostic block instead of silently ignoring bars.
 
-### 5. Report + fix
+### 4. Report back and act
 
-After you reload and let one event fire (or click the new Test-event button):
-- If the toast says "Posted to Discord · Auto-trader" but the channel is empty → the `DISCORD_WEBHOOK_URL` secret points at a different channel/server than the manual Post button hits. We'll surface the webhook host in a server log so we can verify, and (if needed) prompt you via `update_secret` to repoint it.
-- If the toast says "Discord post failed: …" → the server log will show Discord's response body; typical culprits are 400 (empty content after trim), 401 (revoked webhook), or 429 (rate limit). Fix accordingly (payload trim, secret update, or add a small in-hook throttle/queue).
-- If no toast appears at all → the code path isn't running; the console log will name which guard short-circuited (`autoPost=false`, no new events, or hook disabled) and we adjust the guard.
+After NQ runs one more session (or after we replay today's bars via the existing Schwab 5-day history), the diagnostic block will tell us:
+- **All Δ > 0** → the day never gave a valid pullback into an entry level. No code change. Optionally revisit whether Neutral bias should allow T1 entries or Directional should allow entries at the opposite-side Pivot break — but that's a rules decision, not a fix.
+- **Some Δ ≤ 0 but no entry** → real bug. Likely candidates in order: symbol mismatch on hydrate, first-bar date-key gate, or `pickLongEntry`/`pickShortEntry` skipping the level because bar.open equals the level (strict `>=` vs `<=` boundary). We'll pinpoint from the console trace and patch.
 
 ## Technical notes
 
-- No schema, secrets, or routing changes in step 1–4 — this is purely client + one server-side log line.
-- Removal plan: after confirming behavior, revert the `console.info` lines and set the hook back to `silent: true` for auto-posts (keeping error toasts).
-- Files touched: `src/lib/discord-client.ts`, `src/lib/discord.functions.ts`, `src/lib/auto-trader/use-auto-trader.ts`, `src/components/auto-trader/TradeCard.tsx` (Test-event button).
+- Files touched: `src/components/auto-trader/TradeCard.tsx` (diagnostic block), `src/lib/auto-trader/use-auto-trader.ts` (per-bar trace + wiring asserts), `src/lib/auto-trader/state.ts` (optionally return a `lastReject` reason field for the panel).
+- No changes to state.ts's core entry math — we only add read-only diagnostics. If step 4 shows a real bug, that's a follow-up plan.
+- Debug console trace is gated by `localStorage.setItem("auto-trader:debug", "1")` to keep production noise low.
