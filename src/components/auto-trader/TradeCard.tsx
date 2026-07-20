@@ -47,6 +47,8 @@ export function TradeCard({
 }) {
   const { state, enabled, setEnabled, reset, disabledReason } = useAutoTrader(plan, bars, symbol);
   const [copied, setCopied] = useState(false);
+  const [autoPost, setAutoPost] = useState<boolean>(() => loadAutoPostTrades());
+  useEffect(() => { saveAutoPostTrades(autoPost); }, [autoPost]);
 
   const micro = MICRO[symbol];
   const isNeutral = state?.mode === "neutral";
