@@ -3,11 +3,36 @@ import { advance, initialState, type TradeState, type Bar } from "./state";
 import type { DailyPlanRow } from "@/lib/plans.functions";
 import type { Candle } from "@/lib/chart-utils";
 import { toast } from "sonner";
+import { loadAutoPostTrades, sendToDiscord } from "@/lib/discord-client";
 
 type SymbolId = "ES" | "NQ";
 
 const STORAGE_KEY = (sym: SymbolId, date: string) => `auto-trader:v3:${sym}:${date}`;
 const ENABLED_KEY = "auto-trader:enabled";
+
+function fmtEt(t: number): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(t * 1000));
+}
+
+function eventEmoji(kind: string): string {
+  switch (kind) {
+    case "entry": return "🟢";
+    case "scale1":
+    case "scale2": return "💰";
+    case "stop_moved": return "🔧";
+    case "stop_hit": return "🛑";
+    case "target_hit": return "🎯";
+    case "ext1_hit": return "🏁";
+    case "leg_closed": return "🔁";
+    case "closed": return "⏹";
+    default: return "•";
+  }
+}
 
 function loadEnabled(): boolean {
   if (typeof window === "undefined") return true;
