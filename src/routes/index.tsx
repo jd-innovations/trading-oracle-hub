@@ -241,6 +241,18 @@ function CopyBtn({ text }: { text: string }) {
   return (
     <div className="flex items-center gap-1.5">
       <button
+        onClick={() =>
+          sendToDiscord(
+            `🧪 **JD Trading Planner — Discord Test**\nWebhook connection OK · ${new Date().toLocaleString("en-US", { timeZone: "America/New_York" })} ET`,
+            { label: "Test" },
+          )
+        }
+        className="inline-flex items-center gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-amber-500 transition-colors hover:bg-amber-500/20"
+        title="Send a test post to Discord"
+      >
+        <Send className="h-3 w-3" /> Test
+      </button>
+      <button
         onClick={() => sendToDiscord(text, { label: "Daily Plan" })}
         className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-500 transition-colors hover:bg-emerald-500/20"
         title="Post to Discord"
