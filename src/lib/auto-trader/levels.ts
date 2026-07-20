@@ -102,3 +102,27 @@ export function ext1PriceShort(ladder: Level[]): number {
   const first = ladder[0]; // T3↓
   return first.price - downsideAvgSpacing(ladder);
 }
+
+/** Diagnostic: entry pool + side context for an armed state. */
+export interface EntryPoolInfo {
+  side: "long" | "short" | "either";
+  levels: Level[];
+  /** For "either" mode, the short-side pool (levels above pivot). */
+  shortLevels?: Level[];
+}
+export function entryPool(
+  ladder: Level[],
+  mode: "directional" | "neutral",
+  side: "long" | "short" | undefined,
+  armSide: "long" | "short" | "either",
+): EntryPoolInfo {
+  if (mode === "directional") {
+    if (side === "long")  return { side: "long",  levels: supportLevels(ladder) };
+    if (side === "short") return { side: "short", levels: resistanceLevels(ladder) };
+    return { side: "either", levels: [] };
+  }
+  // neutral
+  if (armSide === "long")  return { side: "long",  levels: neutralLongEntries(ladder) };
+  if (armSide === "short") return { side: "short", levels: neutralShortEntries(ladder) };
+  return { side: "either", levels: neutralLongEntries(ladder), shortLevels: neutralShortEntries(ladder) };
+}
