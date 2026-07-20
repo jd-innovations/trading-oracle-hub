@@ -53,7 +53,7 @@ export function Panel({
   children,
   className = "",
 }: {
-  title?: string;
+  title?: ReactNode;
   right?: ReactNode;
   children: ReactNode;
   className?: string;
@@ -63,9 +63,9 @@ export function Panel({
       className={`rounded-lg border border-border bg-card shadow-sm ${className}`}
     >
       {(title || right) && (
-        <header className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-border px-4 py-2.5">
-          {title ? <h2 className="label-xs">{title}</h2> : <span />}
-          {right}
+        <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-border px-4 py-2.5">
+          {title ? <h2 className="label-xs min-w-0 flex-1 truncate">{title}</h2> : <span />}
+          {right ? <div className="flex flex-wrap items-center justify-end gap-1.5">{right}</div> : null}
         </header>
       )}
       <div className="p-4">{children}</div>
