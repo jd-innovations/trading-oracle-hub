@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
-import { Copy, Check, Power, RotateCcw } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Copy, Check, Power, RotateCcw, Send, BellOff, Bell } from "lucide-react";
 import { Panel } from "@/components/layout/AppShell";
 import { fmtPrice } from "@/lib/format";
 import { useAutoTrader } from "@/lib/auto-trader/use-auto-trader";
+import { loadAutoPostTrades, saveAutoPostTrades, sendToDiscord } from "@/lib/discord-client";
 import type { DailyPlanRow } from "@/lib/plans.functions";
 import type { Candle } from "@/lib/chart-utils";
 
