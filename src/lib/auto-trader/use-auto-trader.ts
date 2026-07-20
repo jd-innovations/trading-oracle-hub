@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { advance, initialState, type TradeState, type Bar } from "./state";
+import { advance, initialState, isRthBar, type TradeState, type Bar } from "./state";
+import { buildLadder, entryPool } from "./levels";
 import type { DailyPlanRow } from "@/lib/plans.functions";
 import type { Candle } from "@/lib/chart-utils";
 import { toast } from "sonner";
@@ -9,6 +10,12 @@ type SymbolId = "ES" | "NQ";
 
 const STORAGE_KEY = (sym: SymbolId, date: string) => `auto-trader:v3:${sym}:${date}`;
 const ENABLED_KEY = "auto-trader:enabled";
+const DEBUG_KEY = "auto-trader:debug";
+
+function debugOn(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(DEBUG_KEY) === "1";
+}
 
 function fmtEt(t: number): string {
   return new Intl.DateTimeFormat("en-US", {
