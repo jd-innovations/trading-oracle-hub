@@ -186,7 +186,7 @@ export function TradeCard({
     : "Watching for the first valid pullback into a published support level…";
 
   return (
-    <Panel title={`Auto-Trader · ${micro} (${modeLabel})`} right={controls}>
+    <Panel title={<><span>Auto-Trader · {micro}</span><span className="hidden sm:inline"> ({modeLabel})</span></>} right={controls}>
       {disabledReason && !state && (
         <p className="text-xs text-muted-foreground">{disabledReason}</p>
       )}
