@@ -45,7 +45,7 @@ export function TradeCard({
   symbol: SymbolId;
   livePrice?: number;
 }) {
-  const { state, enabled, setEnabled, reset, disabledReason } = useAutoTrader(plan, bars, symbol);
+  const { state, enabled, setEnabled, reset, disabledReason, diag } = useAutoTrader(plan, bars, symbol);
   const [copied, setCopied] = useState(false);
   const [autoPost, setAutoPost] = useState<boolean>(() => loadAutoPostTrades());
   useEffect(() => { saveAutoPostTrades(autoPost); }, [autoPost]);
