@@ -18,21 +18,21 @@ export function AppShell({
     <div className="flex min-h-screen bg-background text-foreground">
       <SideNav />
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b border-border bg-background/90 px-4 py-3 backdrop-blur md:px-6">
+        <header className="sticky top-0 z-20 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b border-border bg-background/90 px-3 py-3 backdrop-blur sm:gap-3 md:px-6">
           <div className="min-w-0">
-            <div className="label-xs">{subtitle ?? "JD Trading Planner"}</div>
+            <div className="label-xs truncate">{subtitle ?? "JD Trading Planner"}</div>
             <h1 className="display truncate text-lg font-bold leading-tight sm:text-xl">
               {title}
             </h1>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             <Link
               to="/settings/brokers"
               className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-2 py-1.5 text-[11px] font-medium text-foreground hover:bg-muted md:hidden"
               aria-label="Connect Schwab"
             >
               <Plug className="h-3.5 w-3.5" />
-              Schwab
+              <span className="sr-only sm:not-sr-only">Schwab</span>
             </Link>
             <SessionClock />
             <ThemeToggle />
