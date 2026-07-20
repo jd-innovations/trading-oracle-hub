@@ -73,6 +73,9 @@ export function useAutoTrader(
   const [state, setState] = useState<TradeState | null>(null);
   const stateRef = useRef<TradeState | null>(null);
   stateRef.current = state;
+  // Track how many events we've already posted per (symbol,date) so a rehydrate
+  // doesn't re-fire old events and so we only post genuinely new ones.
+  const postedCountRef = useRef<number>(0);
 
   const disabledReason = useMemo(() => {
     if (!plan) return "No plan available.";
@@ -90,6 +93,7 @@ export function useAutoTrader(
     const fresh = initialState(plan, symbol);
     setState(fresh);
     persist(fresh);
+    postedCountRef.current = 0;
     toast("Auto-trader reset for the day.");
   };
 
@@ -99,10 +103,13 @@ export function useAutoTrader(
     const hy = hydrate(symbol, plan.plan_date);
     if (hy && hy.planDate === plan.plan_date) {
       setState(hy);
+      // Treat rehydrated events as already-posted so a page refresh doesn't re-send.
+      postedCountRef.current = hy.events.length;
     } else {
       const fresh = initialState(plan, symbol);
       setState(fresh);
       persist(fresh);
+      postedCountRef.current = 0;
     }
   }, [plan?.plan_date, plan?.bias, symbol, plan]);
 
@@ -114,40 +121,40 @@ export function useAutoTrader(
     if (cur.mode === "directional" && (cur.phase === "stopped" || cur.phase === "closed_win")) return;
     if (!bars.length) return;
 
-
     const autoPost = loadAutoPostTrades();
     let next = cur;
     let changed = false;
     for (const b of bars) {
       if (b.time <= next.lastBarTime) continue;
-      const prev = next;
       const bar: Bar = { time: b.time, open: b.open, high: b.high, low: b.low, close: b.close };
       next = advance(next, plan, bar);
-      if (next !== prev) {
-        changed = true;
-        // Toast the newest events + optionally auto-post to Discord
-        const newEvents = next.events.slice(prev.events.length);
-        for (const ev of newEvents) {
-          if (ev.kind === "entry") toast.success(ev.note ?? "Entry");
-          else if (ev.kind === "scale1" || ev.kind === "scale2") toast.success(ev.note ?? "Scale");
-          else if (ev.kind === "stop_hit") toast.error(ev.note ?? "Stop hit");
-          else if (ev.kind === "ext1_hit") toast.success(ev.note ?? "EXT1 hit");
-          else if (ev.kind === "target_hit") toast(ev.note ?? "Target");
-          else if (ev.kind === "stop_moved") toast(ev.note ?? "Stop moved");
-          else if (ev.kind === "leg_closed") toast(ev.note ?? "Leg closed");
+    }
+    if (next !== cur) {
+      changed = true;
+      const newEvents = next.events.slice(postedCountRef.current);
+      for (const ev of newEvents) {
+        if (ev.kind === "entry") toast.success(ev.note ?? "Entry");
+        else if (ev.kind === "scale1" || ev.kind === "scale2") toast.success(ev.note ?? "Scale");
+        else if (ev.kind === "stop_hit") toast.error(ev.note ?? "Stop hit");
+        else if (ev.kind === "ext1_hit") toast.success(ev.note ?? "EXT1 hit");
+        else if (ev.kind === "target_hit") toast(ev.note ?? "Target");
+        else if (ev.kind === "stop_moved") toast(ev.note ?? "Stop moved");
+        else if (ev.kind === "leg_closed") toast(ev.note ?? "Leg closed");
 
-          if (autoPost) {
-            const line = `${eventEmoji(ev.kind)} **Auto-Trader | ${symbol}** · ${fmtEt(ev.time)} ET · ${ev.note ?? ev.kind}`;
-            sendToDiscord(line, { silent: true });
-          }
+        console.info(`[auto-trader] event autoPost=${autoPost} kind=${ev.kind}`, ev.note);
+        if (autoPost) {
+          const line = `${eventEmoji(ev.kind)} **Auto-Trader | ${symbol}** · ${fmtEt(ev.time)} ET · ${ev.note ?? ev.kind}`;
+          // Non-silent while we diagnose: success toasts confirm the round-trip.
+          sendToDiscord(line, { silent: false, label: "Auto-trader" });
         }
       }
+      postedCountRef.current = next.events.length;
     }
     if (changed) {
       setState(next);
       persist(next);
     }
-  }, [bars, plan, enabled]);
+  }, [bars, plan, enabled, symbol]);
 
   return { state, enabled, setEnabled, reset, disabledReason };
 }
