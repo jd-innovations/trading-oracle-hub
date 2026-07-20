@@ -31,6 +31,18 @@ export function resistanceLevels(ladder: Level[]): Level[] {
   return ladder.slice(pivotIdx); // Pivot … T3↑
 }
 
+/** Neutral-mode LONG entry zones: [T2↓, T3↓] (nearest-to-Pivot first). */
+export function neutralLongEntries(ladder: Level[]): Level[] {
+  const wanted = new Set(["T2↓", "T3↓"]);
+  return ladder.filter((l) => wanted.has(l.label)).sort((a, b) => b.price - a.price);
+}
+
+/** Neutral-mode SHORT entry zones: [T2↑, T3↑] (nearest-to-Pivot first). */
+export function neutralShortEntries(ladder: Level[]): Level[] {
+  const wanted = new Set(["T2↑", "T3↑"]);
+  return ladder.filter((l) => wanted.has(l.label)).sort((a, b) => a.price - b.price);
+}
+
 /** Levels strictly above an entry level, ascending. */
 export function levelsAbove(ladder: Level[], entryLabel: string): Level[] {
   const i = ladder.findIndex((l) => l.label === entryLabel);
