@@ -87,7 +87,39 @@ function JournalPage() {
         </div>
       </Panel>
 
-      <div className="mt-3 overflow-hidden rounded-lg border border-border bg-card">
+      {/* Mobile: card list */}
+      <div className="mt-3 space-y-2 md:hidden">
+        {rows.map((r) => (
+          <div key={r.id} className="rounded-lg border border-border bg-card p-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="mono text-xs text-muted-foreground">{r.date}</span>
+                <span className={`rounded-sm border px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
+                  r.instrument === "ES" ? "border-info/30 bg-info/10 text-info" : "border-pivot/30 bg-pivot/10 text-pivot"
+                }`}>{r.instrument}</span>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <span className={`text-xs font-semibold ${
+                  r.result === "Win" ? "text-bull" : r.result === "Loss" ? "text-bear" : "text-muted-foreground"
+                }`}>{r.result}</span>
+                <span className={`mono text-xs font-semibold ${r.pnl >= 0 ? "text-bull" : "text-bear"}`}>{fmtSigned(r.pnl)}</span>
+              </div>
+            </div>
+            <div className="mt-1.5 text-sm text-foreground">{r.setup}</div>
+            <div className="mt-1 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+              <span>Bias: {r.bias ?? "—"}</span>
+              <span className="mono">Score {r.score ?? "—"}</span>
+            </div>
+            {r.notes && <div className="mt-1 truncate text-xs text-muted-foreground">{r.notes}</div>}
+          </div>
+        ))}
+        {rows.length === 0 && (
+          <div className="rounded-lg border border-border bg-card px-3 py-8 text-center text-sm text-muted-foreground">No trades match.</div>
+        )}
+      </div>
+
+      {/* Desktop / tablet: table */}
+      <div className="mt-3 hidden overflow-hidden rounded-lg border border-border bg-card md:block">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-surface-1 text-left text-[10px] uppercase tracking-wider text-muted-foreground">

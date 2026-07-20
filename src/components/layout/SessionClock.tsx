@@ -15,9 +15,12 @@ export function SessionClock() {
   }, []);
   return (
     <div className="flex items-center gap-2">
-      <span className="mono text-xs text-muted-foreground">{time} ET</span>
+      <span className="mono text-xs text-muted-foreground">
+        {time}
+        <span className="hidden sm:inline"> ET</span>
+      </span>
       <span
-        className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
+        className={`hidden sm:inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
           status.active
             ? "border-bull/30 bg-bull/10 text-bull"
             : "border-border bg-surface-2 text-muted-foreground"

@@ -30,13 +30,13 @@ export function ChartToolbar({
   onFit,
 }: Props) {
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-border bg-surface-1 px-2 py-1.5">
+    <div className="flex flex-wrap items-center gap-1.5 border-b border-border bg-surface-1 px-2 py-1.5 sm:gap-2">
       <div className="inline-flex overflow-hidden rounded-md border border-border">
         {SYMBOLS.map((s) => (
           <button
             key={s}
             onClick={() => onSymbol(s)}
-            className={`mono px-2 py-1 text-[11px] font-semibold transition-colors ${
+            className={`mono px-1.5 py-1 text-[11px] font-semibold transition-colors sm:px-2 ${
               symbol === s
                 ? "bg-foreground text-background"
                 : "bg-surface-2 text-muted-foreground hover:text-foreground"
@@ -52,7 +52,7 @@ export function ChartToolbar({
           <button
             key={tf}
             onClick={() => onTimeframe(tf)}
-            className={`mono px-2 py-1 text-[11px] font-semibold transition-colors ${
+            className={`mono px-1.5 py-1 text-[11px] font-semibold transition-colors sm:px-2 ${
               timeframe === tf
                 ? "bg-foreground text-background"
                 : "bg-surface-2 text-muted-foreground hover:text-foreground"
@@ -65,7 +65,7 @@ export function ChartToolbar({
 
       <button
         onClick={onToggleGex}
-        className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-semibold uppercase tracking-wider transition-colors ${
+        className={`inline-flex items-center gap-1.5 rounded-md border px-1.5 py-1 text-[11px] font-semibold uppercase tracking-wider transition-colors sm:px-2 ${
           showGex
             ? "border-info bg-info/15 text-info"
             : "border-border bg-surface-2 text-muted-foreground hover:text-foreground"
@@ -75,22 +75,22 @@ export function ChartToolbar({
         GEX
       </button>
 
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
         <button
           onClick={onFit}
-          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
+          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-1.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground sm:px-2"
           aria-label="Fit chart to screen"
         >
           <Scan className="h-3 w-3" />
-          Fit
+          <span className="hidden sm:inline">Fit</span>
         </button>
         <button
           onClick={onToggleFullscreen}
-          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
+          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-1.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground sm:px-2"
           aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
         >
           {isFullscreen ? <Minimize2 className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
-          {isFullscreen ? "Exit" : "Fullscreen"}
+          <span className="hidden sm:inline">{isFullscreen ? "Exit" : "Fullscreen"}</span>
         </button>
       </div>
     </div>
