@@ -87,37 +87,38 @@ export function TradeCard({
   };
 
   const statusPill = (() => {
-    if (!enabled) return { text: "DISABLED", tone: "text-muted-foreground border-border" };
-    if (!plan) return { text: "NO PLAN", tone: "text-muted-foreground border-border" };
-    if (!state) return { text: "INIT…", tone: "text-muted-foreground border-border" };
+    if (!enabled) return { short: "OFF", long: "DISABLED", tone: "text-muted-foreground border-border" };
+    if (!plan) return { short: "NO PLAN", long: "NO PLAN", tone: "text-muted-foreground border-border" };
+    if (!state) return { short: "INIT…", long: "INIT…", tone: "text-muted-foreground border-border" };
     const armTone = "text-emerald-500 border-emerald-500/40 bg-emerald-500/10";
     const bullTone = "text-bull border-bull/40 bg-bull/10";
     const bearTone = "text-bear border-bear/40 bg-bear/10";
     if (state.mode === "neutral") {
       if (state.phase === "armed") {
-        if (state.armSide === "either") return { text: "ARMED · NEUTRAL — either", tone: armTone };
-        if (state.armSide === "long")   return { text: "ARMED · NEUTRAL → LONG (T2↓/T3↓)", tone: armTone };
-        if (state.armSide === "short")  return { text: "ARMED · NEUTRAL → SHORT (T2↑/T3↑)", tone: armTone };
+        if (state.armSide === "either") return { short: "ARMED · NEU", long: "ARMED · NEUTRAL — either", tone: armTone };
+        if (state.armSide === "long")   return { short: "ARMED · L", long: "ARMED · NEUTRAL → LONG (T2↓/T3↓)", tone: armTone };
+        if (state.armSide === "short")  return { short: "ARMED · S", long: "ARMED · NEUTRAL → SHORT (T2↑/T3↑)", tone: armTone };
       }
       if (state.phase === "in_trade") {
         const t = state.side === "short" ? bearTone : bullTone;
-        return { text: `IN TRADE · NEUTRAL · ${sideLabel} · ${state.contracts}x`, tone: t };
+        return { short: `IN · ${sideLabel} · ${state.contracts}x`, long: `IN TRADE · NEUTRAL · ${sideLabel} · ${state.contracts}x`, tone: t };
       }
-      return { text: state.phase, tone: "text-muted-foreground border-border" };
+      return { short: state.phase, long: state.phase, tone: "text-muted-foreground border-border" };
     }
     // directional
     const winTone = currentSide === "short" ? bearTone : bullTone;
-    if (state.phase === "armed") return { text: `ARMED · ${sideLabel}`, tone: armTone };
-    if (state.phase === "in_trade") return { text: `IN TRADE · ${sideLabel} · ${state.contracts}x`, tone: winTone };
-    if (state.phase === "closed_win") return { text: `CLOSED +${state.realizedPoints.toFixed(2)}`, tone: bullTone };
-    if (state.phase === "stopped") return { text: `STOPPED ${state.realizedPoints.toFixed(2)}`, tone: bearTone };
-    return { text: state.phase, tone: "text-muted-foreground border-border" };
+    if (state.phase === "armed") return { short: `ARMED · ${sideLabel}`, long: `ARMED · ${sideLabel}`, tone: armTone };
+    if (state.phase === "in_trade") return { short: `IN · ${sideLabel} · ${state.contracts}x`, long: `IN TRADE · ${sideLabel} · ${state.contracts}x`, tone: winTone };
+    if (state.phase === "closed_win") return { short: `+${state.realizedPoints.toFixed(2)}`, long: `CLOSED +${state.realizedPoints.toFixed(2)}`, tone: bullTone };
+    if (state.phase === "stopped") return { short: `${state.realizedPoints.toFixed(2)}`, long: `STOPPED ${state.realizedPoints.toFixed(2)}`, tone: bearTone };
+    return { short: state.phase, long: state.phase, tone: "text-muted-foreground border-border" };
   })();
 
   const controls = (
-    <div className="flex items-center gap-1.5">
+    <>
       <span className={`mono rounded-full border px-2 py-0.5 text-[10px] font-semibold ${statusPill.tone}`}>
-        {statusPill.text}
+        <span className="sm:hidden">{statusPill.short}</span>
+        <span className="hidden sm:inline">{statusPill.long}</span>
       </span>
       <button
         onClick={() => setEnabled(!enabled)}
@@ -144,7 +145,7 @@ export function TradeCard({
         className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-2 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
         title="Reset day"
       >
-        <RotateCcw className="h-3 w-3" /> Reset
+        <RotateCcw className="h-3 w-3" /> <span className="hidden sm:inline">Reset</span>
       </button>
       <button
         onClick={() => {
@@ -155,7 +156,7 @@ export function TradeCard({
         className="inline-flex items-center gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-amber-500 hover:bg-amber-500/20"
         title="Send a synthetic auto-trader event to Discord"
       >
-        <Zap className="h-3 w-3" /> Test event
+        <Zap className="h-3 w-3" /> <span className="hidden sm:inline">Test event</span>
       </button>
       <button
         onClick={() => sendToDiscord(discordText, { label: "Trade" })}
@@ -163,7 +164,7 @@ export function TradeCard({
         className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-2 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground disabled:opacity-40"
         title="Post current trade summary to Discord"
       >
-        <Send className="h-3 w-3" /> Post
+        <Send className="h-3 w-3" /> <span className="hidden sm:inline">Post</span>
       </button>
       <button
         onClick={copy}
@@ -171,9 +172,9 @@ export function TradeCard({
         className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-2 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground disabled:opacity-40"
       >
         {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-        {copied ? "Copied" : "Copy"}
+        <span className="hidden sm:inline">{copied ? "Copied" : "Copy"}</span>
       </button>
-    </div>
+    </>
   );
 
   const watchingCopy = state?.mode === "neutral"
@@ -185,7 +186,7 @@ export function TradeCard({
     : "Watching for the first valid pullback into a published support level…";
 
   return (
-    <Panel title={`Auto-Trader · ${micro} (${modeLabel})`} right={controls}>
+    <Panel title={<><span>Auto-Trader · {micro}</span><span className="hidden sm:inline"> ({modeLabel})</span></>} right={controls}>
       {disabledReason && !state && (
         <p className="text-xs text-muted-foreground">{disabledReason}</p>
       )}

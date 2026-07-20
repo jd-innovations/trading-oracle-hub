@@ -1,31 +1,33 @@
-## Goal
-Fix readable-on-mobile issues surfaced by 390px screenshots of every route. No business-logic changes — only header, journal table, and chart toolbar presentation.
+## Problem
+The Auto-Trader `Panel` header packs the title ("Auto-Trader · MES (LONG)") plus 7 control chips/buttons (status pill, On/Off, Auto, Reset, Test event, Post, Copy) into a single grid row. On mobile the control cluster consumes the full width, forcing the title to truncate to "Auto-Trad…" — and the status pill text ("ARMED · NEUTRAL → LONG (T2↓/T3↓)") itself is long enough to overflow.
 
-## Changes
+## Changes (presentational only)
 
-### 1. `src/components/layout/AppShell.tsx` — header
-- Truncate the subtitle to a single line: add `truncate` and remove any wrap. Hide it entirely below `sm` if still too tight (`hidden xs:block` isn't available; use `hidden sm:block` if needed, but first try `truncate` alone).
-- Let the title use its full row: keep `truncate` but bump size only from `sm:`.
-- Shrink the right cluster on mobile:
-  - Schwab button: icon-only on mobile (hide the "Schwab" text with `sr-only sm:not-sr-only`), keep full label from `sm:`.
-  - Reduce gap from `gap-2` → `gap-1.5` on mobile.
+### 1. `src/components/layout/AppShell.tsx` — `Panel`
+Let the header wrap on narrow widths instead of forcing a single row:
+- Change the header from `grid grid-cols-[minmax(0,1fr)_auto]` to `flex flex-wrap items-center justify-between gap-x-3 gap-y-2`.
+- Keep the title in a `min-w-0 flex-1` wrapper so it can still truncate when it does share the row on wider screens.
+- Right slot gets `flex flex-wrap items-center gap-1.5` so buttons wrap onto a second line on mobile rather than crushing the title.
 
-### 2. `src/components/layout/SessionClock.tsx`
-- On mobile show only the time (`11:54`); hide the "ET" suffix and the "RTH OPEN / CLOSED" pill below `sm:`. Full display returns at `sm:` and above where there's room.
+This is a shared component — verified all other panels (Daily Plan, Session Results, GEX, etc.) already use short `right` clusters and will simply keep their current single-row layout at ≥sm.
 
-### 3. `src/routes/journal.tsx` — trade log table
-- Below `md`, render the trade rows as a stacked card list (Date + Instrument badge on the top row, Setup on the second line, Bias + Result on the third). Keep the current table layout from `md:` and up.
-- Filters block already stacks fine; leave it.
+### 2. `src/components/auto-trader/TradeCard.tsx` — controls row
+- Wrap `controls` in `flex flex-wrap items-center gap-1.5 justify-end` (was `flex items-center gap-1.5`), so on mobile the row breaks cleanly.
+- Shorten the status pill copy on mobile:
+  - "ARMED · NEUTRAL → LONG (T2↓/T3↓)" → drop the parenthetical below `sm:` (render short/long variants).
+  - Long "IN TRADE · NEUTRAL · SHORT · 3x" → below `sm:` render "IN · SHORT · 3x".
+  - Implement by returning both a `textShort` and `textLong` and rendering `<span class="sm:hidden">{short}</span><span class="hidden sm:inline">{long}</span>` inside the pill.
+- Hide button text labels below `sm:` for the low-signal buttons, keep icons:
+  - Reset, Test event, Post, Copy: wrap the trailing word in `<span class="hidden sm:inline">…</span>`.
+  - Keep "On/Off" and "Auto" labels visible (state-carrying).
+- Shorten the panel title on mobile by dropping the mode segment: use `Auto-Trader · ${micro}` and render `(${modeLabel})` in a `hidden sm:inline` span. Since the title is a plain string prop, switch to passing a small JSX node — allowed because `Panel`'s `title` prop is currently typed `string`; widen it to `ReactNode` in step 1.
 
-### 4. `src/components/charts/ChartToolbar.tsx`
-- Make the toolbar single-row on mobile by tightening: `gap-2` → `gap-1.5`, buttons `px-2` → `px-1.5`, `text-[11px]` stays. On the Fullscreen button hide the "Fullscreen"/"Exit" label below `sm:` (icon-only on mobile). Same for "Fit" — icon-only on mobile.
-- Keep `flex-wrap` as a safety net so if it still overflows it wraps gracefully rather than horizontal-scrolls.
-
-### 5. Verification
-- Re-run the same Playwright pass at 390×844 across `/`, `/analysis`, `/iron-fly`, `/journal`, `/performance`, `/balance-zones`.
-- Confirm titles are no longer truncated with ellipsis, subtitle is single-line (or hidden), Journal rows are readable, and no route exceeds `document.scrollWidth === window.innerWidth (390)`.
-- Also spot-check at 360px (small Android) since that's the practical floor.
+### 3. Verification
+- Playwright at 360×844 and 390×844 on `/` (ES) and `/` after toggling NQ — confirm:
+  - Panel title reads "Auto-Trader · MES" with no ellipsis.
+  - Controls wrap to a second row, no horizontal scroll.
+  - Status pill fits within the row.
+- Spot-check ≥`sm` (≥640px) to confirm the header still renders on a single row with full labels.
 
 ## Out of scope
-- No changes to data feeds, auto-trader, Discord, or chart rendering logic.
-- No new components — presentational tweaks only.
+Auto-trader logic, Discord flow, chart, and other panels' contents.
