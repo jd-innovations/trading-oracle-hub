@@ -115,6 +115,7 @@ export function useAutoTrader(
     if (!bars.length) return;
 
 
+    const autoPost = loadAutoPostTrades();
     let next = cur;
     let changed = false;
     for (const b of bars) {
@@ -124,7 +125,7 @@ export function useAutoTrader(
       next = advance(next, plan, bar);
       if (next !== prev) {
         changed = true;
-        // Toast the newest events
+        // Toast the newest events + optionally auto-post to Discord
         const newEvents = next.events.slice(prev.events.length);
         for (const ev of newEvents) {
           if (ev.kind === "entry") toast.success(ev.note ?? "Entry");
@@ -134,6 +135,11 @@ export function useAutoTrader(
           else if (ev.kind === "target_hit") toast(ev.note ?? "Target");
           else if (ev.kind === "stop_moved") toast(ev.note ?? "Stop moved");
           else if (ev.kind === "leg_closed") toast(ev.note ?? "Leg closed");
+
+          if (autoPost) {
+            const line = `${eventEmoji(ev.kind)} **Auto-Trader | ${symbol}** · ${fmtEt(ev.time)} ET · ${ev.note ?? ev.kind}`;
+            sendToDiscord(line, { silent: true });
+          }
         }
       }
     }
