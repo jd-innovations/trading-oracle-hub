@@ -27,6 +27,7 @@ function eventEmoji(kind: string): string {
     case "stop_hit": return "🛑";
     case "target_hit": return "🎯";
     case "ext1_hit": return "🏁";
+    case "leg_closed": return "🔁";
     case "closed": return "⏹";
     default: return "•";
   }
@@ -47,8 +48,10 @@ export function TradeCard({
   const [copied, setCopied] = useState(false);
 
   const micro = MICRO[symbol];
-  const side = state?.side ?? (plan?.bias === "Bearish" ? "short" : "long");
-  const sideLabel = side === "short" ? "SHORT" : "LONG";
+  const isNeutral = state?.mode === "neutral";
+  const currentSide = state?.side ?? (plan?.bias === "Bearish" ? "short" : plan?.bias === "Bullish" ? "long" : undefined);
+  const modeLabel = isNeutral ? "NEUTRAL" : currentSide === "short" ? "SHORT" : "LONG";
+  const sideLabel = currentSide === "short" ? "SHORT" : currentSide === "long" ? "LONG" : "—";
 
   const unrealized = useMemo(() => {
     if (!state || state.phase !== "in_trade" || livePrice == null || state.entry == null) return 0;
@@ -58,16 +61,20 @@ export function TradeCard({
 
   const discordText = useMemo(() => {
     if (!state) return "";
-    const header = `**Auto-Trader | ${symbol} (${micro}) ${sideLabel}** — ${state.planDate}`;
+    const header = `**Auto-Trader | ${symbol} (${micro}) ${modeLabel}** — ${state.planDate}`;
     const lines = state.events.map((ev) => `${eventEmoji(ev.kind)} ${fmtTime(ev.time)} · ${ev.note ?? ev.kind}`);
-    const footer =
-      state.phase === "in_trade"
-        ? `📌 Open: ${state.contracts}x @ ${state.entry?.toFixed(2)} · Stop ${state.stop?.toFixed(2)} (${state.stopLabel})`
-        : state.phase === "closed_win" ? `✅ Closed +${state.realizedPoints.toFixed(2)} pts`
-        : state.phase === "stopped" ? `❌ Stopped ${state.realizedPoints.toFixed(2)} pts`
-        : "";
+    let footer = "";
+    if (state.phase === "in_trade") {
+      footer = `📌 Open: ${sideLabel} ${state.contracts}x @ ${state.entry?.toFixed(2)} · Stop ${state.stop?.toFixed(2)} (${state.stopLabel})`;
+    } else if (state.mode === "directional" && state.phase === "closed_win") {
+      footer = `✅ Closed +${state.realizedPoints.toFixed(2)} pts`;
+    } else if (state.mode === "directional" && state.phase === "stopped") {
+      footer = `❌ Stopped ${state.realizedPoints.toFixed(2)} pts`;
+    } else if (state.mode === "neutral" && state.completedLegs.length > 0) {
+      footer = `📊 Legs: ${state.completedLegs.length} · Total ${state.realizedPoints >= 0 ? "+" : ""}${state.realizedPoints.toFixed(2)} pts`;
+    }
     return [header, ...lines, footer].filter(Boolean).join("\n");
-  }, [state, symbol, micro, sideLabel]);
+  }, [state, symbol, micro, modeLabel, sideLabel]);
 
   const copy = () => {
     navigator.clipboard.writeText(discordText).then(() => {
@@ -79,13 +86,28 @@ export function TradeCard({
   const statusPill = (() => {
     if (!enabled) return { text: "DISABLED", tone: "text-muted-foreground border-border" };
     if (!plan) return { text: "NO PLAN", tone: "text-muted-foreground border-border" };
-    if (plan.bias === "Neutral") return { text: "IDLE · NEUTRAL", tone: "text-info border-info/40 bg-info/10" };
     if (!state) return { text: "INIT…", tone: "text-muted-foreground border-border" };
-    const winTone = side === "short" ? "text-bear border-bear/40 bg-bear/10" : "text-bull border-bull/40 bg-bull/10";
-    if (state.phase === "armed") return { text: `ARMED · ${sideLabel}`, tone: "text-emerald-500 border-emerald-500/40 bg-emerald-500/10" };
+    const armTone = "text-emerald-500 border-emerald-500/40 bg-emerald-500/10";
+    const bullTone = "text-bull border-bull/40 bg-bull/10";
+    const bearTone = "text-bear border-bear/40 bg-bear/10";
+    if (state.mode === "neutral") {
+      if (state.phase === "armed") {
+        if (state.armSide === "either") return { text: "ARMED · NEUTRAL — either", tone: armTone };
+        if (state.armSide === "long")   return { text: "ARMED · NEUTRAL → LONG (T2↓/T3↓)", tone: armTone };
+        if (state.armSide === "short")  return { text: "ARMED · NEUTRAL → SHORT (T2↑/T3↑)", tone: armTone };
+      }
+      if (state.phase === "in_trade") {
+        const t = state.side === "short" ? bearTone : bullTone;
+        return { text: `IN TRADE · NEUTRAL · ${sideLabel} · ${state.contracts}x`, tone: t };
+      }
+      return { text: state.phase, tone: "text-muted-foreground border-border" };
+    }
+    // directional
+    const winTone = currentSide === "short" ? bearTone : bullTone;
+    if (state.phase === "armed") return { text: `ARMED · ${sideLabel}`, tone: armTone };
     if (state.phase === "in_trade") return { text: `IN TRADE · ${sideLabel} · ${state.contracts}x`, tone: winTone };
-    if (state.phase === "closed_win") return { text: `CLOSED +${state.realizedPoints.toFixed(2)}`, tone: "text-bull border-bull/40 bg-bull/10" };
-    if (state.phase === "stopped") return { text: `STOPPED ${state.realizedPoints.toFixed(2)}`, tone: "text-bear border-bear/40 bg-bear/10" };
+    if (state.phase === "closed_win") return { text: `CLOSED +${state.realizedPoints.toFixed(2)}`, tone: bullTone };
+    if (state.phase === "stopped") return { text: `STOPPED ${state.realizedPoints.toFixed(2)}`, tone: bearTone };
     return { text: state.phase, tone: "text-muted-foreground border-border" };
   })();
 
@@ -120,14 +142,45 @@ export function TradeCard({
     </div>
   );
 
+  const watchingCopy = state?.mode === "neutral"
+    ? state.armSide === "short"
+      ? "Watching T2↑/T3↑ for a short setup…"
+      : state.armSide === "long"
+        ? "Watching T2↓/T3↓ for a long setup…"
+        : "Watching T2/T3 on either side for the first valid pullback…"
+    : "Watching for the first valid pullback into a published support level…";
+
   return (
-    <Panel title={`Auto-Trader · ${micro} (${sideLabel})`} right={controls}>
+    <Panel title={`Auto-Trader · ${micro} (${modeLabel})`} right={controls}>
       {disabledReason && !state && (
         <p className="text-xs text-muted-foreground">{disabledReason}</p>
       )}
 
       {state && (
         <div className="space-y-3">
+          {state.mode === "neutral" && state.completedLegs.length > 0 && (
+            <div className="rounded-md border border-border/60 bg-surface-1 p-2">
+              <div className="mb-1 flex items-center justify-between">
+                <span className="label-xs">Completed legs</span>
+                <span className={`mono text-xs font-semibold ${state.realizedPoints >= 0 ? "text-bull" : "text-bear"}`}>
+                  {state.completedLegs.length} · {state.realizedPoints >= 0 ? "+" : ""}{state.realizedPoints.toFixed(2)} pts
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {state.completedLegs.map((leg, i) => {
+                  const win = leg.realized >= 0;
+                  const tone = win ? "border-bull/40 bg-bull/10 text-bull" : "border-bear/40 bg-bear/10 text-bear";
+                  const sideTag = leg.side === "long" ? "L" : "S";
+                  return (
+                    <span key={i} className={`mono rounded border px-1.5 py-0.5 text-[11px] ${tone}`}>
+                      {sideTag} {leg.entryLabel} → {leg.exitLabel ?? fmtPrice(leg.exit)} · {win ? "+" : ""}{leg.realized.toFixed(2)}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
             <Stat label="Entry" value={state.entry != null ? fmtPrice(state.entry) : "—"} sub={state.entryLabel} />
             <Stat label="Stop"  value={state.stop  != null ? fmtPrice(state.stop)  : "—"} sub={state.stopLabel} tone="bear" />
@@ -164,9 +217,7 @@ export function TradeCard({
           <div className="rounded-md border border-border/60 bg-surface-1">
             <div className="label-xs px-2 pt-2">Event log</div>
             {state.events.length === 0 ? (
-              <p className="px-2 pb-2 pt-1 text-xs text-muted-foreground">
-                Watching for the first valid pullback into a published support level…
-              </p>
+              <p className="px-2 pb-2 pt-1 text-xs text-muted-foreground">{watchingCopy}</p>
             ) : (
               <ul className="mono max-h-56 overflow-auto px-2 pb-2 pt-1 text-[12px]">
                 {state.events.map((ev, i) => (
@@ -185,6 +236,7 @@ export function TradeCard({
     </Panel>
   );
 }
+
 
 function Stat({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: "bull" | "bear" }) {
   const toneCls = tone === "bull" ? "text-bull" : tone === "bear" ? "text-bear" : "text-foreground";
