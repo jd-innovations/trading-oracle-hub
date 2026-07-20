@@ -47,15 +47,18 @@ export function TradeCard({
   const [copied, setCopied] = useState(false);
 
   const micro = MICRO[symbol];
+  const side = state?.side ?? (plan?.bias === "Bearish" ? "short" : "long");
+  const sideLabel = side === "short" ? "SHORT" : "LONG";
 
   const unrealized = useMemo(() => {
     if (!state || state.phase !== "in_trade" || livePrice == null || state.entry == null) return 0;
-    return (livePrice - state.entry) * state.contracts;
+    const dir = state.side === "short" ? -1 : 1;
+    return (livePrice - state.entry) * dir * state.contracts;
   }, [state, livePrice]);
 
   const discordText = useMemo(() => {
     if (!state) return "";
-    const header = `**Auto-Trader | ${symbol} (${micro})** — ${state.planDate}`;
+    const header = `**Auto-Trader | ${symbol} (${micro}) ${sideLabel}** — ${state.planDate}`;
     const lines = state.events.map((ev) => `${eventEmoji(ev.kind)} ${fmtTime(ev.time)} · ${ev.note ?? ev.kind}`);
     const footer =
       state.phase === "in_trade"
@@ -64,7 +67,7 @@ export function TradeCard({
         : state.phase === "stopped" ? `❌ Stopped ${state.realizedPoints.toFixed(2)} pts`
         : "";
     return [header, ...lines, footer].filter(Boolean).join("\n");
-  }, [state, symbol, micro]);
+  }, [state, symbol, micro, sideLabel]);
 
   const copy = () => {
     navigator.clipboard.writeText(discordText).then(() => {
@@ -76,10 +79,11 @@ export function TradeCard({
   const statusPill = (() => {
     if (!enabled) return { text: "DISABLED", tone: "text-muted-foreground border-border" };
     if (!plan) return { text: "NO PLAN", tone: "text-muted-foreground border-border" };
-    if (plan.bias !== "Bullish") return { text: `IDLE · ${plan.bias.toUpperCase()}`, tone: "text-info border-info/40 bg-info/10" };
+    if (plan.bias === "Neutral") return { text: "IDLE · NEUTRAL", tone: "text-info border-info/40 bg-info/10" };
     if (!state) return { text: "INIT…", tone: "text-muted-foreground border-border" };
-    if (state.phase === "armed") return { text: "ARMED", tone: "text-emerald-500 border-emerald-500/40 bg-emerald-500/10" };
-    if (state.phase === "in_trade") return { text: `IN TRADE · ${state.contracts}x`, tone: "text-bull border-bull/40 bg-bull/10" };
+    const winTone = side === "short" ? "text-bear border-bear/40 bg-bear/10" : "text-bull border-bull/40 bg-bull/10";
+    if (state.phase === "armed") return { text: `ARMED · ${sideLabel}`, tone: "text-emerald-500 border-emerald-500/40 bg-emerald-500/10" };
+    if (state.phase === "in_trade") return { text: `IN TRADE · ${sideLabel} · ${state.contracts}x`, tone: winTone };
     if (state.phase === "closed_win") return { text: `CLOSED +${state.realizedPoints.toFixed(2)}`, tone: "text-bull border-bull/40 bg-bull/10" };
     if (state.phase === "stopped") return { text: `STOPPED ${state.realizedPoints.toFixed(2)}`, tone: "text-bear border-bear/40 bg-bear/10" };
     return { text: state.phase, tone: "text-muted-foreground border-border" };
@@ -117,7 +121,7 @@ export function TradeCard({
   );
 
   return (
-    <Panel title={`Auto-Trader · ${micro}`} right={controls}>
+    <Panel title={`Auto-Trader · ${micro} (${sideLabel})`} right={controls}>
       {disabledReason && !state && (
         <p className="text-xs text-muted-foreground">{disabledReason}</p>
       )}
@@ -132,19 +136,20 @@ export function TradeCard({
             <Stat label="Unrealized" value={state.phase === "in_trade" ? `${unrealized >= 0 ? "+" : ""}${unrealized.toFixed(2)}` : "—"} sub="pts" tone={unrealized >= 0 ? "bull" : "bear"} />
           </div>
 
-          {state.above.length > 0 && state.phase === "in_trade" && (
+          {state.ladderAhead.length > 0 && state.phase === "in_trade" && (
             <div className="rounded-md border border-border/60 bg-surface-1 p-2">
-              <div className="label-xs mb-1">Ladder above entry</div>
+              <div className="label-xs mb-1">Ladder ahead of entry</div>
               <div className="flex flex-wrap gap-1.5">
-                {state.above.map((lv, i) => {
+                {state.ladderAhead.map((lv, i) => {
                   const accepted = i <= state.acceptedIdx;
+                  const acceptedTone = state.side === "short"
+                    ? "border-bear/40 bg-bear/10 text-bear"
+                    : "border-bull/40 bg-bull/10 text-bull";
                   return (
                     <span
                       key={`${lv.label}-${i}`}
                       className={`mono rounded border px-1.5 py-0.5 text-[11px] ${
-                        accepted
-                          ? "border-bull/40 bg-bull/10 text-bull"
-                          : "border-border bg-surface-2 text-muted-foreground"
+                        accepted ? acceptedTone : "border-border bg-surface-2 text-muted-foreground"
                       }`}
                     >
                       {lv.label} {fmtPrice(lv.price)} {accepted ? "✓" : ""}
@@ -154,6 +159,7 @@ export function TradeCard({
               </div>
             </div>
           )}
+
 
           <div className="rounded-md border border-border/60 bg-surface-1">
             <div className="label-xs px-2 pt-2">Event log</div>
