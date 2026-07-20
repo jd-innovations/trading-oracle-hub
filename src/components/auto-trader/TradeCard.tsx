@@ -192,6 +192,48 @@ export function TradeCard({
 
       {state && (
         <div className="space-y-3">
+          {state.phase === "armed" && diag && diag.pool.length > 0 && (
+            <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-2">
+              <div className="mb-1 flex items-center justify-between">
+                <span className="label-xs">Entry gate · why no fill yet</span>
+                <span className="mono text-[10px] text-muted-foreground">
+                  {diag.rthBarsSeen} RTH bar{diag.rthBarsSeen === 1 ? "" : "s"} seen
+                  {diag.rejectedWrongDate > 0 ? ` · ${diag.rejectedWrongDate} off-date` : ""}
+                </span>
+              </div>
+              {diag.rthBarsSeen === 0 && (
+                <p className="mono text-[11px] text-muted-foreground">
+                  No RTH bars for {diag.planDate} yet · bars total {diag.barsSeen}
+                  {diag.rejectedWrongDate > 0 ? ` · ${diag.rejectedWrongDate} bars rejected (wrong ET date)` : ""}
+                </p>
+              )}
+              <div className="flex flex-wrap gap-1.5">
+                {diag.pool
+                  .slice()
+                  .sort((a, b) => a.deltaPts - b.deltaPts)
+                  .map((p, i) => {
+                    const tagged = p.deltaPts <= 0;
+                    const tone = tagged
+                      ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-500"
+                      : "border-amber-500/40 bg-amber-500/10 text-amber-500";
+                    const arrow = p.side === "long" ? "↓" : "↑";
+                    const timeStr = p.closestTime ? fmtTime(p.closestTime) : "—";
+                    return (
+                      <span key={i} className={`mono rounded border px-1.5 py-0.5 text-[11px] ${tone}`} title={`closest ${p.closestPrice.toFixed(2)} @ ${timeStr}`}>
+                        {arrow} {p.label} {p.price.toFixed(2)} · Δ {tagged ? "0" : p.deltaPts.toFixed(2)} pts
+                      </span>
+                    );
+                  })}
+              </div>
+              {diag.pool.some((p) => p.deltaPts <= 0) && (
+                <p className="mono mt-1 text-[11px] text-amber-500">
+                  A level was tagged but no entry fired — check console (enable with <code>localStorage.setItem('auto-trader:debug','1')</code>) or Reset the day.
+                </p>
+              )}
+            </div>
+          )}
+
+
           {state.mode === "neutral" && state.completedLegs.length > 0 && (
             <div className="rounded-md border border-border/60 bg-surface-1 p-2">
               <div className="mb-1 flex items-center justify-between">
