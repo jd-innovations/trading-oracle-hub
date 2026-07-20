@@ -11,6 +11,11 @@ export const postToDiscord = createServerFn({ method: "POST" })
     const url = process.env.DISCORD_WEBHOOK_URL;
     if (!url) throw new Error("DISCORD_WEBHOOK_URL is not configured");
 
+    let host = "unknown";
+    try { host = new URL(url).host; } catch { /* ignore */ }
+    const preview = data.content.slice(0, 80).replace(/\n/g, " | ");
+    console.log(`[discord.fn] → host=${host} len=${data.content.length} preview="${preview}"`);
+
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -22,9 +27,10 @@ export const postToDiscord = createServerFn({ method: "POST" })
 
     if (!res.ok) {
       const body = await res.text();
-      console.error(`Discord webhook failed [${res.status}]: ${body}`);
+      console.error(`[discord.fn] failed [${res.status}] host=${host}: ${body}`);
       throw new Error(`Discord webhook failed [${res.status}]: ${body}`);
     }
 
-    return { ok: true };
+    console.log(`[discord.fn] ok host=${host} status=${res.status}`);
+    return { ok: true, host };
   });

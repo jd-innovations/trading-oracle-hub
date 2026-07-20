@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Copy, Check, Power, RotateCcw, Send, BellOff, Bell } from "lucide-react";
+import { Copy, Check, Power, RotateCcw, Send, BellOff, Bell, Zap } from "lucide-react";
 import { Panel } from "@/components/layout/AppShell";
 import { fmtPrice } from "@/lib/format";
 import { useAutoTrader } from "@/lib/auto-trader/use-auto-trader";
@@ -145,6 +145,17 @@ export function TradeCard({
         title="Reset day"
       >
         <RotateCcw className="h-3 w-3" /> Reset
+      </button>
+      <button
+        onClick={() => {
+          const now = Math.floor(Date.now() / 1000);
+          const line = `🧪 **Auto-Trader | ${symbol}** · ${fmtTime(now)} ET · Test event (synthetic)`;
+          sendToDiscord(line, { silent: false, label: "Auto-trader test" });
+        }}
+        className="inline-flex items-center gap-1 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-amber-500 hover:bg-amber-500/20"
+        title="Send a synthetic auto-trader event to Discord"
+      >
+        <Zap className="h-3 w-3" /> Test event
       </button>
       <button
         onClick={() => sendToDiscord(discordText, { label: "Trade" })}
