@@ -6,7 +6,7 @@ import { toast } from "sonner";
 
 type SymbolId = "ES" | "NQ";
 
-const STORAGE_KEY = (sym: SymbolId, date: string) => `auto-trader:${sym}:${date}`;
+const STORAGE_KEY = (sym: SymbolId, date: string) => `auto-trader:v2:${sym}:${date}`;
 const ENABLED_KEY = "auto-trader:enabled";
 
 function loadEnabled(): boolean {
@@ -23,7 +23,11 @@ function persist(state: TradeState) {
 function hydrate(sym: SymbolId, date: string): TradeState | null {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY(sym, date));
-    return raw ? (JSON.parse(raw) as TradeState) : null;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as TradeState;
+    // Guard against pre-v2 shape (missing side / ladderAhead)
+    if (!parsed.side || !Array.isArray(parsed.ladderAhead)) return null;
+    return parsed;
   } catch { return null; }
 }
 
@@ -47,7 +51,7 @@ export function useAutoTrader(
 
   const disabledReason = useMemo(() => {
     if (!plan) return "No plan available.";
-    if (plan.bias !== "Bullish") return `Plan bias is ${plan.bias} — LONG auto-trader idle.`;
+    if (plan.bias === "Neutral") return "Plan bias is Neutral — auto-trader idle.";
     if (!enabled) return "Auto-trader disabled.";
     return null;
   }, [plan, enabled]);
@@ -67,7 +71,7 @@ export function useAutoTrader(
 
   // (Re)initialize when plan/symbol changes.
   useEffect(() => {
-    if (!plan || plan.bias !== "Bullish") { setState(null); return; }
+    if (!plan || plan.bias === "Neutral") { setState(null); return; }
     const hy = hydrate(symbol, plan.plan_date);
     if (hy && hy.planDate === plan.plan_date) {
       setState(hy);
@@ -80,11 +84,12 @@ export function useAutoTrader(
 
   // Advance on new bars.
   useEffect(() => {
-    if (!plan || !enabled || plan.bias !== "Bullish") return;
+    if (!plan || !enabled || plan.bias === "Neutral") return;
     const cur = stateRef.current;
     if (!cur) return;
     if (cur.phase === "stopped" || cur.phase === "closed_win") return;
     if (!bars.length) return;
+
 
     let next = cur;
     let changed = false;

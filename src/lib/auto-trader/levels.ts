@@ -25,18 +25,38 @@ export function supportLevels(ladder: Level[]): Level[] {
   return ladder.slice(0, pivotIdx + 1); // T3↓ … Pivot
 }
 
-/** Levels strictly above an entry level, in ascending order. */
+/** Resistance levels for SHORT entries — Pivot and above (asc). */
+export function resistanceLevels(ladder: Level[]): Level[] {
+  const pivotIdx = ladder.findIndex((l) => l.label === "Pivot");
+  return ladder.slice(pivotIdx); // Pivot … T3↑
+}
+
+/** Levels strictly above an entry level, ascending. */
 export function levelsAbove(ladder: Level[], entryLabel: string): Level[] {
   const i = ladder.findIndex((l) => l.label === entryLabel);
   if (i < 0) return [];
   return ladder.slice(i + 1);
 }
 
-/** One published level below the entry, for the initial stop. */
+/** Levels strictly below an entry level, descending (nearest first). */
+export function levelsBelow(ladder: Level[], entryLabel: string): Level[] {
+  const i = ladder.findIndex((l) => l.label === entryLabel);
+  if (i <= 0) return [];
+  return ladder.slice(0, i).reverse();
+}
+
+/** One published level below the entry, for the initial LONG stop. */
 export function levelBelow(ladder: Level[], entryLabel: string): Level | null {
   const i = ladder.findIndex((l) => l.label === entryLabel);
   if (i <= 0) return null;
   return ladder[i - 1];
+}
+
+/** One published level above the entry, for the initial SHORT stop. */
+export function levelAbove(ladder: Level[], entryLabel: string): Level | null {
+  const i = ladder.findIndex((l) => l.label === entryLabel);
+  if (i < 0 || i >= ladder.length - 1) return null;
+  return ladder[i + 1];
 }
 
 /** Average spacing between adjacent upside published levels (Pivot→T3↑). */
@@ -49,8 +69,24 @@ export function upsideAvgSpacing(ladder: Level[]): number {
   return sum / (up.length - 1);
 }
 
-/** EXT1 target = final published upside + avg spacing. */
+/** Average spacing between adjacent downside published levels (T3↓→Pivot). */
+export function downsideAvgSpacing(ladder: Level[]): number {
+  const pivotIdx = ladder.findIndex((l) => l.label === "Pivot");
+  const dn = ladder.slice(0, pivotIdx + 1); // T3↓..Pivot
+  if (dn.length < 2) return 0;
+  let sum = 0;
+  for (let i = 1; i < dn.length; i++) sum += dn[i].price - dn[i - 1].price;
+  return sum / (dn.length - 1);
+}
+
+/** EXT1 target (LONG) = final published upside + avg upside spacing. */
 export function ext1Price(ladder: Level[]): number {
   const last = ladder[ladder.length - 1];
   return last.price + upsideAvgSpacing(ladder);
+}
+
+/** EXT1 target (SHORT) = final published downside − avg downside spacing. */
+export function ext1PriceShort(ladder: Level[]): number {
+  const first = ladder[0]; // T3↓
+  return first.price - downsideAvgSpacing(ladder);
 }
