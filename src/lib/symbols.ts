@@ -14,12 +14,19 @@ export interface SymbolConfig {
   tickSize: number;
   /** Minimum spacing between pivot & sequential targets (points). */
   minGap: number;
+  /** USD value per 1.00 point move, per contract. ES = $50, NQ = $20. */
+  pointValue: number;
 }
 
 export const SYMBOLS: Record<SymbolId, SymbolConfig> = {
-  ES: { id: "ES", schwabRoot: "/ES", label: "ES", tickSize: 0.25, minGap: 8 },
-  NQ: { id: "NQ", schwabRoot: "/NQ", label: "NQ", tickSize: 0.25, minGap: 80 },
+  ES: { id: "ES", schwabRoot: "/ES", label: "ES", tickSize: 0.25, minGap: 8, pointValue: 50 },
+  NQ: { id: "NQ", schwabRoot: "/NQ", label: "NQ", tickSize: 0.25, minGap: 80, pointValue: 20 },
 };
+
+export function pointValueFor(symbol: string): number {
+  const key = (symbol.startsWith("/") ? symbol.slice(1) : symbol).toUpperCase() as SymbolId;
+  return SYMBOLS[key]?.pointValue ?? 50;
+}
 
 export const SUPPORTED_SYMBOLS: SymbolConfig[] = [SYMBOLS.ES, SYMBOLS.NQ];
 
