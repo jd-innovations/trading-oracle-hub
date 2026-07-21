@@ -5,6 +5,8 @@ import type { DailyPlanRow } from "@/lib/plans.functions";
 import type { Candle } from "@/lib/chart-utils";
 import { toast } from "sonner";
 import { loadAutoPostTrades, sendToDiscord } from "@/lib/discord-client";
+import { logAutoTraderLeg } from "@/lib/journal.functions";
+import { useServerFn } from "@tanstack/react-start";
 
 type SymbolId = "ES" | "NQ";
 
