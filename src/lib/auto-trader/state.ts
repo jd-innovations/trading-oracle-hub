@@ -37,8 +37,10 @@ export interface CompletedLeg {
   side: Side;
   entry: number;
   entryLabel: string;
+  entryTime: number; // unix seconds
   exit: number;
   exitLabel?: string;
+  exitTime: number; // unix seconds
   phase: "closed_win" | "stopped";
   realized: number;
 }
