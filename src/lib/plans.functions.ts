@@ -108,6 +108,24 @@ export const generateDailyPlan = createServerFn({ method: "POST" })
       console.error("[plan] upsert failed", error);
       return { error: "save_failed" };
     }
+
+    // Mirror into journal_entries so the Journal reflects real plan activity.
+    const { error: jErr } = await supabaseAdmin
+      .from("journal_entries")
+      .upsert(
+        {
+          user_id: ownerId,
+          kind: "plan",
+          symbol: sym.id,
+          plan_date: gen.planDate,
+          bias: gen.bias,
+          pivot: gen.pivot,
+          notes: gen.context ?? null,
+        },
+        { onConflict: "user_id,symbol,plan_date", ignoreDuplicates: false },
+      );
+    if (jErr) console.warn("[plan] journal mirror failed", jErr);
+
     return { plan: upserted as DailyPlanRow };
   });
 
