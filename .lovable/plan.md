@@ -1,33 +1,62 @@
-## Problem
-The Auto-Trader `Panel` header packs the title ("Auto-Trader · MES (LONG)") plus 7 control chips/buttons (status pill, On/Off, Auto, Reset, Test event, Post, Copy) into a single grid row. On mobile the control cluster consumes the full width, forcing the title to truncate to "Auto-Trad…" — and the status pill text ("ARMED · NEUTRAL → LONG (T2↓/T3↓)") itself is long enough to overflow.
+## Goal
+Replace the mock Journal with real ES/NQ activity captured from the Auto-Trader and the Daily Plan / Session Results flows.
 
-## Changes (presentational only)
+## What gets logged
 
-### 1. `src/components/layout/AppShell.tsx` — `Panel`
-Let the header wrap on narrow widths instead of forcing a single row:
-- Change the header from `grid grid-cols-[minmax(0,1fr)_auto]` to `flex flex-wrap items-center justify-between gap-x-3 gap-y-2`.
-- Keep the title in a `min-w-0 flex-1` wrapper so it can still truncate when it does share the row on wider screens.
-- Right slot gets `flex flex-wrap items-center gap-1.5` so buttons wrap onto a second line on mobile rather than crushing the title.
+**Trades (Auto-Trader legs)** — one row per completed leg (both directional stop/target closes and Neutral leg re-arms).
+- symbol (ES/NQ), plan_date, side (long/short), bias (from plan)
+- entry price + label, exit price + label, entry_time, exit_time
+- phase: `closed_win` | `stopped`
+- realized_points (from `CompletedLeg.realized`), contracts
+- Computed `pnl_usd` = points × contract multiplier (ES $50/pt, NQ $20/pt)
+- notes: entry/exit label pair, e.g. "PIVOT → T2↑"
 
-This is a shared component — verified all other panels (Daily Plan, Session Results, GEX, etc.) already use short `right` clusters and will simply keep their current single-row layout at ≥sm.
+**Plans (Daily Plan summaries)** — one row per plan_date/symbol.
+- bias, pivot, targets, score (from `computePlanResults` once available)
+- Written when the plan is generated; score/close/H/L back-filled when Results are computed
 
-### 2. `src/components/auto-trader/TradeCard.tsx` — controls row
-- Wrap `controls` in `flex flex-wrap items-center gap-1.5 justify-end` (was `flex items-center gap-1.5`), so on mobile the row breaks cleanly.
-- Shorten the status pill copy on mobile:
-  - "ARMED · NEUTRAL → LONG (T2↓/T3↓)" → drop the parenthetical below `sm:` (render short/long variants).
-  - Long "IN TRADE · NEUTRAL · SHORT · 3x" → below `sm:` render "IN · SHORT · 3x".
-  - Implement by returning both a `textShort` and `textLong` and rendering `<span class="sm:hidden">{short}</span><span class="hidden sm:inline">{long}</span>` inside the pill.
-- Hide button text labels below `sm:` for the low-signal buttons, keep icons:
-  - Reset, Test event, Post, Copy: wrap the trailing word in `<span class="hidden sm:inline">…</span>`.
-  - Keep "On/Off" and "Auto" labels visible (state-carrying).
-- Shorten the panel title on mobile by dropping the mode segment: use `Auto-Trader · ${micro}` and render `(${modeLabel})` in a `hidden sm:inline` span. Since the title is a plain string prop, switch to passing a small JSX node — allowed because `Panel`'s `title` prop is currently typed `string`; widen it to `ReactNode` in step 1.
+## Data model
 
-### 3. Verification
-- Playwright at 360×844 and 390×844 on `/` (ES) and `/` after toggling NQ — confirm:
-  - Panel title reads "Auto-Trader · MES" with no ellipsis.
-  - Controls wrap to a second row, no horizontal scroll.
-  - Status pill fits within the row.
-- Spot-check ≥`sm` (≥640px) to confirm the header still renders on a single row with full labels.
+New table `public.journal_entries` (RLS scoped to `auth.uid()`):
+- `id`, `user_id`, `created_at`, `updated_at`
+- `kind` text: `'trade' | 'plan'`
+- `symbol` text: `'ES' | 'NQ'`
+- `plan_date` date
+- Trade fields: `side`, `bias`, `entry_price`, `entry_label`, `exit_price`, `exit_label`, `entry_time` timestamptz, `exit_time` timestamptz, `phase`, `realized_points` numeric, `contracts` int
+- Plan fields: `pivot`, `score` int, `session_high`, `session_low`, `session_close`
+- Common: `notes` text
+- Unique index `(user_id, kind, symbol, plan_date, entry_time)` for trades and `(user_id, kind, symbol, plan_date)` for plans (partial indexes) so re-emits upsert cleanly.
+
+## Server functions (`src/lib/journal.functions.ts`)
+- `logAutoTraderLeg({ symbol, planDate, leg, bias, entryTime, exitTime, contracts })` — upsert one trade row.
+- `logDailyPlan({ symbol, planDate, bias, pivot, ... })` — upsert plan row on generate.
+- `logPlanResults({ symbol, planDate, score, high, low, close })` — update the plan row after results compute.
+- `listJournal({ symbol?: 'ES'|'NQ'|'All', from?, to? })` — return combined rows sorted by date desc.
+
+All use `requireSupabaseAuth` (context.supabase, RLS as user).
+
+## Wiring
+
+1. `src/lib/auto-trader/use-auto-trader.ts` — after `advance` returns a state whose `completedLegs.length` grew, call `logAutoTraderLeg` for each newly added leg (client-side via `useServerFn`). Idempotent via unique index on `(user_id, kind, symbol, plan_date, entry_time)`.
+2. `src/lib/plans.functions.ts` — inside `generateDailyPlan` handler, after upserting `daily_plans`, insert/update the corresponding `journal_entries` plan row (server-side, same user).
+3. `computePlanResultsFn` — after computing results, update the journal plan row with score/H/L/C.
+
+## Journal page (`src/routes/journal.tsx`)
+- Drop mock import; fetch via `listJournal` using `useSuspenseQuery` in the standard loader/ensureQueryData pattern.
+- Instrument filter: `All | ES | NQ` (SPX removed — user scope is ES/NQ only).
+- Two visual row types:
+  - **Trade row**: date · symbol chip · side badge · "ENTRY_LABEL → EXIT_LABEL" · points · $P&L
+  - **Plan row**: date · symbol chip · "Daily Plan — {bias}" · score · session H/L/C
+- Summary chip (top-right): total $P&L, win count, plan avg score for filtered range.
+- Mobile card layout and desktop table both updated for the new shape.
 
 ## Out of scope
-Auto-trader logic, Discord flow, chart, and other panels' contents.
+- SPX Iron Fly entries (module isn't wired to real trades yet).
+- Manual entry/edit UI.
+- Pulling Schwab fills.
+- Backfilling historical mock rows — journal starts empty and fills as trades/plans occur.
+
+## Technical notes
+- Contract multipliers live in `src/lib/symbols.ts` (add `pointValue: 50` for ES, `20` for NQ).
+- `fmtSigned` continues to render `$` amounts; `mono` class already applied.
+- Migration creates table + GRANTs (`authenticated`, `service_role`) + RLS policies (`auth.uid() = user_id` for all ops) + `updated_at` trigger.
