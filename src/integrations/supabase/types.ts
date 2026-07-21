@@ -98,6 +98,87 @@ export type Database = {
         }
         Relationships: []
       }
+      journal_entries: {
+        Row: {
+          bias: string | null
+          contracts: number | null
+          created_at: string
+          entry_label: string | null
+          entry_price: number | null
+          entry_time: string | null
+          exit_label: string | null
+          exit_price: number | null
+          exit_time: string | null
+          id: string
+          kind: string
+          notes: string | null
+          phase: string | null
+          pivot: number | null
+          plan_date: string
+          realized_points: number | null
+          score: number | null
+          session_close: number | null
+          session_high: number | null
+          session_low: number | null
+          side: string | null
+          symbol: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          bias?: string | null
+          contracts?: number | null
+          created_at?: string
+          entry_label?: string | null
+          entry_price?: number | null
+          entry_time?: string | null
+          exit_label?: string | null
+          exit_price?: number | null
+          exit_time?: string | null
+          id?: string
+          kind: string
+          notes?: string | null
+          phase?: string | null
+          pivot?: number | null
+          plan_date: string
+          realized_points?: number | null
+          score?: number | null
+          session_close?: number | null
+          session_high?: number | null
+          session_low?: number | null
+          side?: string | null
+          symbol: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          bias?: string | null
+          contracts?: number | null
+          created_at?: string
+          entry_label?: string | null
+          entry_price?: number | null
+          entry_time?: string | null
+          exit_label?: string | null
+          exit_price?: number | null
+          exit_time?: string | null
+          id?: string
+          kind?: string
+          notes?: string | null
+          phase?: string | null
+          pivot?: number | null
+          plan_date?: string
+          realized_points?: number | null
+          score?: number | null
+          session_close?: number | null
+          session_high?: number | null
+          session_low?: number | null
+          side?: string | null
+          symbol?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       schwab_oauth_state: {
         Row: {
           code_verifier: string
