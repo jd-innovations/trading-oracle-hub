@@ -5,6 +5,8 @@ import type { DailyPlanRow } from "@/lib/plans.functions";
 import type { Candle } from "@/lib/chart-utils";
 import { toast } from "sonner";
 import { loadAutoPostTrades, sendToDiscord } from "@/lib/discord-client";
+import { logAutoTraderLeg } from "@/lib/journal.functions";
+import { useServerFn } from "@tanstack/react-start";
 
 type SymbolId = "ES" | "NQ";
 
@@ -111,6 +113,8 @@ export function useAutoTrader(
   const stateRef = useRef<TradeState | null>(null);
   stateRef.current = state;
   const postedCountRef = useRef<number>(0);
+  const loggedLegCountRef = useRef<number>(0);
+  const logLeg = useServerFn(logAutoTraderLeg);
 
   const disabledReason = useMemo(() => {
     if (!plan) return "No plan available.";
@@ -139,6 +143,7 @@ export function useAutoTrader(
     if (hy && hy.planDate === plan.plan_date && hy.symbol === symbol) {
       setState(hy);
       postedCountRef.current = hy.events.length;
+      loggedLegCountRef.current = hy.completedLegs.length;
     } else {
       if (hy && hy.symbol !== symbol) {
         console.warn(`[auto-trader] hydrate symbol mismatch: stored=${hy.symbol} prop=${symbol} — resetting`);
@@ -147,6 +152,7 @@ export function useAutoTrader(
       setState(fresh);
       persist(fresh);
       postedCountRef.current = 0;
+      loggedLegCountRef.current = 0;
     }
   }, [plan?.plan_date, plan?.bias, symbol, plan]);
 
@@ -197,12 +203,39 @@ export function useAutoTrader(
         }
       }
       postedCountRef.current = next.events.length;
+
+      // Log any newly completed legs to the journal.
+      if (next.completedLegs.length > loggedLegCountRef.current) {
+        const newLegs = next.completedLegs.slice(loggedLegCountRef.current);
+        for (const leg of newLegs) {
+          logLeg({
+            data: {
+              symbol,
+              planDate: plan.plan_date,
+              bias: plan.bias,
+              side: leg.side,
+              entryPrice: leg.entry,
+              entryLabel: leg.entryLabel,
+              exitPrice: leg.exit,
+              exitLabel: leg.exitLabel ?? null,
+              entryTime: leg.entryTime,
+              exitTime: leg.exitTime,
+              phase: leg.phase,
+              realizedPoints: leg.realized,
+              contracts: 3,
+            },
+          }).catch((err) => {
+            console.warn("[auto-trader] journal log failed", err);
+          });
+        }
+        loggedLegCountRef.current = next.completedLegs.length;
+      }
     }
     if (changed) {
       setState(next);
       persist(next);
     }
-  }, [bars, plan, enabled, symbol]);
+  }, [bars, plan, enabled, symbol, logLeg]);
 
   // Live diagnostic: closest approach per pool level today.
   const diag = useMemo<AutoTraderDiag | null>(() => {
