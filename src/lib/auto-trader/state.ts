@@ -385,13 +385,15 @@ function closeLeg(
 ): TradeState {
   const { exitPx, exitLabel, cumRealized, legRealizedFinal, legPhase, events, bar } = args;
 
-  const leg: CompletedLeg | null = s.side && s.entry != null && s.entryLabel
+  const leg: CompletedLeg | null = s.side && s.entry != null && s.entryLabel && s.entryTime != null
     ? {
         side: s.side,
         entry: s.entry,
         entryLabel: s.entryLabel,
+        entryTime: s.entryTime,
         exit: exitPx,
         exitLabel,
+        exitTime: bar.time,
         phase: legPhase,
         realized: legRealizedFinal,
       }
