@@ -113,6 +113,8 @@ export function useAutoTrader(
   const stateRef = useRef<TradeState | null>(null);
   stateRef.current = state;
   const postedCountRef = useRef<number>(0);
+  const loggedLegCountRef = useRef<number>(0);
+  const logLeg = useServerFn(logAutoTraderLeg);
 
   const disabledReason = useMemo(() => {
     if (!plan) return "No plan available.";
