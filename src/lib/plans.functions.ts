@@ -217,5 +217,26 @@ export const computePlanResultsFn = createServerFn({ method: "POST" })
       t1Dn: Number(plan.t1_dn), t2Dn: Number(plan.t2_dn), t3Dn: Number(plan.t3_dn),
     }, bars);
     if (!results) return { error: "no_session_bars", plan };
+
+    // Mirror score / session H-L-C into the journal plan row.
+    const { error: jErr } = await supabaseAdmin
+      .from("journal_entries")
+      .upsert(
+        {
+          user_id: ownerId,
+          kind: "plan",
+          symbol: sym.id,
+          plan_date: plan.plan_date,
+          bias: plan.bias,
+          pivot: Number(plan.pivot),
+          score: results.score,
+          session_high: results.high,
+          session_low: results.low,
+          session_close: results.close,
+        },
+        { onConflict: "user_id,symbol,plan_date", ignoreDuplicates: false },
+      );
+    if (jErr) console.warn("[results] journal mirror failed", jErr);
+
     return { results, plan };
   });
