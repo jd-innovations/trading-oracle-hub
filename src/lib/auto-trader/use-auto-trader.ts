@@ -143,6 +143,7 @@ export function useAutoTrader(
     if (hy && hy.planDate === plan.plan_date && hy.symbol === symbol) {
       setState(hy);
       postedCountRef.current = hy.events.length;
+      loggedLegCountRef.current = hy.completedLegs.length;
     } else {
       if (hy && hy.symbol !== symbol) {
         console.warn(`[auto-trader] hydrate symbol mismatch: stored=${hy.symbol} prop=${symbol} — resetting`);
@@ -151,6 +152,7 @@ export function useAutoTrader(
       setState(fresh);
       persist(fresh);
       postedCountRef.current = 0;
+      loggedLegCountRef.current = 0;
     }
   }, [plan?.plan_date, plan?.bias, symbol, plan]);
 
