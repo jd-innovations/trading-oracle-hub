@@ -203,12 +203,39 @@ export function useAutoTrader(
         }
       }
       postedCountRef.current = next.events.length;
+
+      // Log any newly completed legs to the journal.
+      if (next.completedLegs.length > loggedLegCountRef.current) {
+        const newLegs = next.completedLegs.slice(loggedLegCountRef.current);
+        for (const leg of newLegs) {
+          logLeg({
+            data: {
+              symbol,
+              planDate: plan.plan_date,
+              bias: plan.bias,
+              side: leg.side,
+              entryPrice: leg.entry,
+              entryLabel: leg.entryLabel,
+              exitPrice: leg.exit,
+              exitLabel: leg.exitLabel ?? null,
+              entryTime: leg.entryTime,
+              exitTime: leg.exitTime,
+              phase: leg.phase,
+              realizedPoints: leg.realized,
+              contracts: 3,
+            },
+          }).catch((err) => {
+            console.warn("[auto-trader] journal log failed", err);
+          });
+        }
+        loggedLegCountRef.current = next.completedLegs.length;
+      }
     }
     if (changed) {
       setState(next);
       persist(next);
     }
-  }, [bars, plan, enabled, symbol]);
+  }, [bars, plan, enabled, symbol, logLeg]);
 
   // Live diagnostic: closest approach per pool level today.
   const diag = useMemo<AutoTraderDiag | null>(() => {
