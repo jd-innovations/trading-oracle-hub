@@ -194,7 +194,7 @@ export function useAutoTrader(
         else if (ev.kind === "stop_moved") toast(ev.note ?? "Stop moved");
         else if (ev.kind === "leg_closed") toast(ev.note ?? "Leg closed");
 
-        console.info(`[auto-trader] event autoPost=${autoPost} kind=${ev.kind}`, ev.note);
+        console.info(`[auto-trader] event kind=${ev.kind}`, ev.note);
         // Discord posting and journal logging are handled server-side by
         // /api/public/auto-trader/tick (pg_cron every minute during RTH) so
         // alerts fire even when no browser tab is open. The client only
