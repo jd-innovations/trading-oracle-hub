@@ -197,39 +197,13 @@ export function useAutoTrader(
         else if (ev.kind === "leg_closed") toast(ev.note ?? "Leg closed");
 
         console.info(`[auto-trader] event autoPost=${autoPost} kind=${ev.kind}`, ev.note);
-        if (autoPost) {
-          const line = `${eventEmoji(ev.kind)} **Auto-Trader | ${symbol}** · ${fmtEt(ev.time)} ET · ${ev.note ?? ev.kind}`;
-          sendToDiscord(line, { silent: false, label: "Auto-trader" });
-        }
+        // Discord posting and journal logging are handled server-side by
+        // /api/public/auto-trader/tick (pg_cron every minute during RTH) so
+        // alerts fire even when no browser tab is open. The client only
+        // shows toasts.
       }
       postedCountRef.current = next.events.length;
-
-      // Log any newly completed legs to the journal.
-      if (next.completedLegs.length > loggedLegCountRef.current) {
-        const newLegs = next.completedLegs.slice(loggedLegCountRef.current);
-        for (const leg of newLegs) {
-          logLeg({
-            data: {
-              symbol,
-              planDate: plan.plan_date,
-              bias: plan.bias,
-              side: leg.side,
-              entryPrice: leg.entry,
-              entryLabel: leg.entryLabel,
-              exitPrice: leg.exit,
-              exitLabel: leg.exitLabel ?? null,
-              entryTime: leg.entryTime,
-              exitTime: leg.exitTime,
-              phase: leg.phase,
-              realizedPoints: leg.realized,
-              contracts: 3,
-            },
-          }).catch((err) => {
-            console.warn("[auto-trader] journal log failed", err);
-          });
-        }
-        loggedLegCountRef.current = next.completedLegs.length;
-      }
+      loggedLegCountRef.current = next.completedLegs.length;
     }
     if (changed) {
       setState(next);
