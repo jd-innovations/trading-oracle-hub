@@ -163,7 +163,6 @@ export function useAutoTrader(
     if (cur.mode === "directional" && (cur.phase === "stopped" || cur.phase === "closed_win")) return;
     if (!bars.length) return;
 
-    const autoPost = loadAutoPostTrades();
     const dbg = debugOn();
     let next = cur;
     let changed = false;
