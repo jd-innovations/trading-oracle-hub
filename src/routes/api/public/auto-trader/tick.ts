@@ -179,7 +179,7 @@ async function tickSymbol(symbol: SymbolId, webhook: string | undefined): Promis
         user_id: ownerId,
         symbol,
         plan_date: plan.plan_date,
-        state: next as unknown as Record<string, unknown>,
+        state: JSON.parse(JSON.stringify(next)),
         posted_event_count: newPosted,
         logged_leg_count: newLoggedLegs,
         updated_at: new Date().toISOString(),
