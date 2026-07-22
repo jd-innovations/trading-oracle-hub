@@ -19,6 +19,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedSettingsBrokersRouteImport } from './routes/_authenticated/settings.brokers'
 import { Route as ApiPublicSchwabCallbackRouteImport } from './routes/api/public/schwab/callback'
+import { Route as ApiPublicAutoTraderTickRouteImport } from './routes/api/public/auto-trader/tick'
 
 const PerformanceRoute = PerformanceRouteImport.update({
   id: '/performance',
@@ -70,6 +71,11 @@ const ApiPublicSchwabCallbackRoute = ApiPublicSchwabCallbackRouteImport.update({
   path: '/api/public/schwab/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicAutoTraderTickRoute = ApiPublicAutoTraderTickRouteImport.update({
+  id: '/api/public/auto-trader/tick',
+  path: '/api/public/auto-trader/tick',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -80,6 +86,7 @@ export interface FileRoutesByFullPath {
   '/journal': typeof JournalRoute
   '/performance': typeof PerformanceRoute
   '/settings/brokers': typeof AuthenticatedSettingsBrokersRoute
+  '/api/public/auto-trader/tick': typeof ApiPublicAutoTraderTickRoute
   '/api/public/schwab/callback': typeof ApiPublicSchwabCallbackRoute
 }
 export interface FileRoutesByTo {
@@ -91,6 +98,7 @@ export interface FileRoutesByTo {
   '/journal': typeof JournalRoute
   '/performance': typeof PerformanceRoute
   '/settings/brokers': typeof AuthenticatedSettingsBrokersRoute
+  '/api/public/auto-trader/tick': typeof ApiPublicAutoTraderTickRoute
   '/api/public/schwab/callback': typeof ApiPublicSchwabCallbackRoute
 }
 export interface FileRoutesById {
@@ -104,6 +112,7 @@ export interface FileRoutesById {
   '/journal': typeof JournalRoute
   '/performance': typeof PerformanceRoute
   '/_authenticated/settings/brokers': typeof AuthenticatedSettingsBrokersRoute
+  '/api/public/auto-trader/tick': typeof ApiPublicAutoTraderTickRoute
   '/api/public/schwab/callback': typeof ApiPublicSchwabCallbackRoute
 }
 export interface FileRouteTypes {
@@ -117,6 +126,7 @@ export interface FileRouteTypes {
     | '/journal'
     | '/performance'
     | '/settings/brokers'
+    | '/api/public/auto-trader/tick'
     | '/api/public/schwab/callback'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -128,6 +138,7 @@ export interface FileRouteTypes {
     | '/journal'
     | '/performance'
     | '/settings/brokers'
+    | '/api/public/auto-trader/tick'
     | '/api/public/schwab/callback'
   id:
     | '__root__'
@@ -140,6 +151,7 @@ export interface FileRouteTypes {
     | '/journal'
     | '/performance'
     | '/_authenticated/settings/brokers'
+    | '/api/public/auto-trader/tick'
     | '/api/public/schwab/callback'
   fileRoutesById: FileRoutesById
 }
@@ -152,6 +164,7 @@ export interface RootRouteChildren {
   IronFlyRoute: typeof IronFlyRoute
   JournalRoute: typeof JournalRoute
   PerformanceRoute: typeof PerformanceRoute
+  ApiPublicAutoTraderTickRoute: typeof ApiPublicAutoTraderTickRoute
   ApiPublicSchwabCallbackRoute: typeof ApiPublicSchwabCallbackRoute
 }
 
@@ -227,6 +240,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicSchwabCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/auto-trader/tick': {
+      id: '/api/public/auto-trader/tick'
+      path: '/api/public/auto-trader/tick'
+      fullPath: '/api/public/auto-trader/tick'
+      preLoaderRoute: typeof ApiPublicAutoTraderTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -250,6 +270,7 @@ const rootRouteChildren: RootRouteChildren = {
   IronFlyRoute: IronFlyRoute,
   JournalRoute: JournalRoute,
   PerformanceRoute: PerformanceRoute,
+  ApiPublicAutoTraderTickRoute: ApiPublicAutoTraderTickRoute,
   ApiPublicSchwabCallbackRoute: ApiPublicSchwabCallbackRoute,
 }
 export const routeTree = rootRouteImport

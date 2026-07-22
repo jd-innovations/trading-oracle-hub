@@ -96,7 +96,7 @@ async function tickSymbol(symbol: SymbolId, webhook: string | undefined): Promis
     return { symbol, status: "state_lookup_failed" };
   }
 
-  let state: TradeState = (stateRows?.[0]?.state as TradeState | undefined) ?? initialState(plan, symbol);
+  let state: TradeState = (stateRows?.[0]?.state as unknown as TradeState | undefined) ?? initialState(plan, symbol);
   let postedCount: number = (stateRows?.[0]?.posted_event_count as number | undefined) ?? 0;
   let loggedLegCount: number = (stateRows?.[0]?.logged_leg_count as number | undefined) ?? 0;
 
