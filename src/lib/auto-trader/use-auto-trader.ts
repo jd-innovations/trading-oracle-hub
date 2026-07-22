@@ -4,9 +4,8 @@ import { buildLadder, entryPool } from "./levels";
 import type { DailyPlanRow } from "@/lib/plans.functions";
 import type { Candle } from "@/lib/chart-utils";
 import { toast } from "sonner";
-import { loadAutoPostTrades, sendToDiscord } from "@/lib/discord-client";
-import { logAutoTraderLeg } from "@/lib/journal.functions";
-import { useServerFn } from "@tanstack/react-start";
+// Discord posting + journal logging are handled server-side by
+// /api/public/auto-trader/tick (pg_cron). Client only shows toasts.
 
 type SymbolId = "ES" | "NQ";
 
