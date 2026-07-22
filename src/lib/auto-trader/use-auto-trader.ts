@@ -207,7 +207,7 @@ export function useAutoTrader(
       setState(next);
       persist(next);
     }
-  }, [bars, plan, enabled, symbol, logLeg]);
+  }, [bars, plan, enabled, symbol]);
 
   // Live diagnostic: closest approach per pool level today.
   const diag = useMemo<AutoTraderDiag | null>(() => {
