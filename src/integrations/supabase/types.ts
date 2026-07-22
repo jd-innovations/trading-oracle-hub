@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      auto_trader_state: {
+        Row: {
+          logged_leg_count: number
+          plan_date: string
+          posted_event_count: number
+          state: Json
+          symbol: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          logged_leg_count?: number
+          plan_date: string
+          posted_event_count?: number
+          state: Json
+          symbol: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          logged_leg_count?: number
+          plan_date?: string
+          posted_event_count?: number
+          state?: Json
+          symbol?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       daily_plans: {
         Row: {
           bias: string

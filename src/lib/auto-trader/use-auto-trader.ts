@@ -4,9 +4,8 @@ import { buildLadder, entryPool } from "./levels";
 import type { DailyPlanRow } from "@/lib/plans.functions";
 import type { Candle } from "@/lib/chart-utils";
 import { toast } from "sonner";
-import { loadAutoPostTrades, sendToDiscord } from "@/lib/discord-client";
-import { logAutoTraderLeg } from "@/lib/journal.functions";
-import { useServerFn } from "@tanstack/react-start";
+// Discord posting + journal logging are handled server-side by
+// /api/public/auto-trader/tick (pg_cron). Client only shows toasts.
 
 type SymbolId = "ES" | "NQ";
 
@@ -114,7 +113,7 @@ export function useAutoTrader(
   stateRef.current = state;
   const postedCountRef = useRef<number>(0);
   const loggedLegCountRef = useRef<number>(0);
-  const logLeg = useServerFn(logAutoTraderLeg);
+  
 
   const disabledReason = useMemo(() => {
     if (!plan) return "No plan available.";
@@ -164,7 +163,6 @@ export function useAutoTrader(
     if (cur.mode === "directional" && (cur.phase === "stopped" || cur.phase === "closed_win")) return;
     if (!bars.length) return;
 
-    const autoPost = loadAutoPostTrades();
     const dbg = debugOn();
     let next = cur;
     let changed = false;
@@ -196,46 +194,20 @@ export function useAutoTrader(
         else if (ev.kind === "stop_moved") toast(ev.note ?? "Stop moved");
         else if (ev.kind === "leg_closed") toast(ev.note ?? "Leg closed");
 
-        console.info(`[auto-trader] event autoPost=${autoPost} kind=${ev.kind}`, ev.note);
-        if (autoPost) {
-          const line = `${eventEmoji(ev.kind)} **Auto-Trader | ${symbol}** · ${fmtEt(ev.time)} ET · ${ev.note ?? ev.kind}`;
-          sendToDiscord(line, { silent: false, label: "Auto-trader" });
-        }
+        console.info(`[auto-trader] event kind=${ev.kind}`, ev.note);
+        // Discord posting and journal logging are handled server-side by
+        // /api/public/auto-trader/tick (pg_cron every minute during RTH) so
+        // alerts fire even when no browser tab is open. The client only
+        // shows toasts.
       }
       postedCountRef.current = next.events.length;
-
-      // Log any newly completed legs to the journal.
-      if (next.completedLegs.length > loggedLegCountRef.current) {
-        const newLegs = next.completedLegs.slice(loggedLegCountRef.current);
-        for (const leg of newLegs) {
-          logLeg({
-            data: {
-              symbol,
-              planDate: plan.plan_date,
-              bias: plan.bias,
-              side: leg.side,
-              entryPrice: leg.entry,
-              entryLabel: leg.entryLabel,
-              exitPrice: leg.exit,
-              exitLabel: leg.exitLabel ?? null,
-              entryTime: leg.entryTime,
-              exitTime: leg.exitTime,
-              phase: leg.phase,
-              realizedPoints: leg.realized,
-              contracts: 3,
-            },
-          }).catch((err) => {
-            console.warn("[auto-trader] journal log failed", err);
-          });
-        }
-        loggedLegCountRef.current = next.completedLegs.length;
-      }
+      loggedLegCountRef.current = next.completedLegs.length;
     }
     if (changed) {
       setState(next);
       persist(next);
     }
-  }, [bars, plan, enabled, symbol, logLeg]);
+  }, [bars, plan, enabled, symbol]);
 
   // Live diagnostic: closest approach per pool level today.
   const diag = useMemo<AutoTraderDiag | null>(() => {
