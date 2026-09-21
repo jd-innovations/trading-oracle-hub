@@ -231,6 +231,9 @@ export function advance(state: TradeState, plan: DailyPlanRow, bar: Bar): TradeS
       ladderAhead: ahead,
       acceptedIdx: -1,
       legRealized: 0,
+      mfe: 0,
+      mae: 0,
+      mfeTime: bar.time,
       events: [
         ...s.events,
         {
