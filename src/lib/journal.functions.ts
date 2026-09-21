@@ -21,6 +21,9 @@ export interface JournalEntry {
   phase: "closed_win" | "stopped" | null;
   realized_points: number | null;
   contracts: number | null;
+  mfe_points: number | null;
+  mae_points: number | null;
+  mfe_time: string | null;
   pivot: number | null;
   score: number | null;
   session_high: number | null;
