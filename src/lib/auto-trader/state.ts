@@ -106,6 +106,9 @@ export function initialState(plan: DailyPlanRow, symbol: "ES" | "NQ"): TradeStat
     events: [],
     realizedPoints: 0,
     legRealized: 0,
+    mfe: 0,
+    mae: 0,
+    mfeTime: 0,
     completedLegs: [],
   };
 }
