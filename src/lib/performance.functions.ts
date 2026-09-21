@@ -13,6 +13,9 @@ export interface PerfTrade {
   phase: "closed_win" | "stopped" | null;
   realized_points: number | null;
   contracts: number | null;
+  mfe_points: number | null;
+  mae_points: number | null;
+  mfe_time: string | null;
 }
 
 /** All closed auto-trader legs for the signed-in user, oldest first. */
@@ -23,7 +26,7 @@ export const listPerfTrades = createServerFn({ method: "GET" })
     const { data, error } = await supabase
       .from("journal_entries")
       .select(
-        "plan_date, symbol, side, entry_price, exit_price, entry_label, exit_label, exit_time, phase, realized_points, contracts",
+        "plan_date, symbol, side, entry_price, exit_price, entry_label, exit_label, exit_time, phase, realized_points, contracts, mfe_points, mae_points, mfe_time",
       )
       .eq("user_id", userId)
       .eq("kind", "trade")

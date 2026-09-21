@@ -43,6 +43,12 @@ export interface CompletedLeg {
   exitTime: number; // unix seconds
   phase: "closed_win" | "stopped";
   realized: number;
+  /** Max favorable excursion from entry, per contract, in points (>= 0). */
+  mfe?: number;
+  /** Max adverse excursion from entry, per contract, in points (<= 0). */
+  mae?: number;
+  /** Unix seconds of the bar where MFE peaked. */
+  mfeTime?: number;
 }
 
 export interface TradeState {
@@ -69,6 +75,12 @@ export interface TradeState {
   realizedPoints: number;
   /** Realized P/L for the leg currently open (or the one just closed until it's committed). */
   legRealized: number;
+  /** Running max favorable excursion for the open leg, per contract, in points. */
+  mfe: number;
+  /** Running max adverse excursion for the open leg, per contract, in points (<= 0). */
+  mae: number;
+  /** Bar time where the running MFE peaked. */
+  mfeTime: number;
   completedLegs: CompletedLeg[];
 }
 
@@ -94,6 +106,9 @@ export function initialState(plan: DailyPlanRow, symbol: "ES" | "NQ"): TradeStat
     events: [],
     realizedPoints: 0,
     legRealized: 0,
+    mfe: 0,
+    mae: 0,
+    mfeTime: 0,
     completedLegs: [],
   };
 }
@@ -216,6 +231,9 @@ export function advance(state: TradeState, plan: DailyPlanRow, bar: Bar): TradeS
       ladderAhead: ahead,
       acceptedIdx: -1,
       legRealized: 0,
+      mfe: 0,
+      mae: 0,
+      mfeTime: bar.time,
       events: [
         ...s.events,
         {
@@ -233,6 +251,17 @@ export function advance(state: TradeState, plan: DailyPlanRow, bar: Bar): TradeS
   if (s.phase !== "in_trade") return s;
 
   const isLong = s.side === "long";
+
+  // --------- Excursion tracking (before the stop check, so a bar that runs
+  // up and then stops out still records the run-up) ---------
+  if (s.entry != null) {
+    const favorable = isLong ? bar.high - s.entry : s.entry - bar.low;
+    const adverse = isLong ? bar.low - s.entry : s.entry - bar.high;
+    const prevMfe = s.mfe ?? 0;
+    if (favorable > prevMfe) s = { ...s, mfe: favorable, mfeTime: bar.time };
+    if (adverse < (s.mae ?? 0)) s = { ...s, mae: adverse };
+  }
+
 
   // --------- Stop-out ---------
   const stopHit = s.stop != null && (isLong ? bar.low <= s.stop : bar.high >= s.stop);
@@ -396,6 +425,9 @@ function closeLeg(
         exitTime: bar.time,
         phase: legPhase,
         realized: legRealizedFinal,
+        mfe: s.mfe ?? 0,
+        mae: s.mae ?? 0,
+        mfeTime: s.mfeTime ?? s.entryTime,
       }
     : null;
 
@@ -431,6 +463,9 @@ function closeLeg(
     ext1: undefined,
     realizedPoints: cumRealized,
     legRealized: 0,
+    mfe: 0,
+    mae: 0,
+    mfeTime: 0,
     completedLegs: leg ? [...s.completedLegs, leg] : s.completedLegs,
     events: [
       ...events,

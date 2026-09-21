@@ -99,6 +99,38 @@ function computeStats(trades: PerfTrade[]): Stats {
   };
 }
 
+interface Excursions {
+  tracked: number;
+  untracked: number;
+  everGreen: number;
+  avgPeak: number;
+  avgPeakWhenGreen: number;
+  beyondRisk: number;
+  medianPeak: number;
+}
+
+/** How far losing trades ran in your favor before they turned. */
+function computeExcursions(trades: PerfTrade[]): Excursions {
+  const losers = trades.filter((t) => t.phase !== "closed_win");
+  const tracked = losers.filter((t) => t.mfe_points != null);
+  const peaks = tracked.map((t) => Number(t.mfe_points ?? 0));
+  const green = peaks.filter((p) => p > 0);
+  const beyondRisk = tracked.filter((t) => {
+    const risk = Math.abs(Number(t.entry_price ?? 0) - Number(t.exit_price ?? 0));
+    return risk > 0 && Number(t.mfe_points ?? 0) >= risk;
+  }).length;
+  const sorted = [...peaks].sort((a, b) => a - b);
+  return {
+    tracked: tracked.length,
+    untracked: losers.length - tracked.length,
+    everGreen: green.length,
+    avgPeak: peaks.length ? peaks.reduce((a, b) => a + b, 0) / peaks.length : 0,
+    avgPeakWhenGreen: green.length ? green.reduce((a, b) => a + b, 0) / green.length : 0,
+    beyondRisk,
+    medianPeak: sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0,
+  };
+}
+
 function PerfPage() {
   const [windowKey, setWindowKey] = useState<WindowKey>("All");
   const [inst, setInst] = useState<Instrument>("All");
@@ -156,6 +188,7 @@ function PerfPage() {
   const stats = useMemo(() => computeStats(windowed), [windowed]);
   const esStats = useMemo(() => computeStats(windowed.filter((t) => t.symbol === "ES")), [windowed]);
   const nqStats = useMemo(() => computeStats(windowed.filter((t) => t.symbol === "NQ")), [windowed]);
+  const exc = useMemo(() => computeExcursions(windowed), [windowed]);
 
   const equity = useMemo(() => {
     let v = 0;
@@ -195,6 +228,9 @@ function PerfPage() {
       "",
       `Avg win: ${usd(stats.avgWinUsd)} · Avg loss: ${usd(stats.avgLossUsd)}`,
       `Profit factor: ${stats.profitFactor === null ? "—" : stats.profitFactor.toFixed(2)} · Max drawdown: -$${Math.round(stats.maxDdUsd).toLocaleString("en-US")}`,
+      exc.tracked
+        ? `Losers ever in profit: ${exc.everGreen}/${exc.tracked} · Avg peak: ${pts(exc.avgPeak)} pts/contract · Peak beat risk: ${exc.beyondRisk}`
+        : null,
       "@everyone",
     ]
       .filter(Boolean)
@@ -324,6 +360,44 @@ function PerfPage() {
           </div>
         </Panel>
       </div>
+
+      <div className="mt-3">
+        <Panel
+          title="Losing Trades — How Far Into Profit?"
+          right={
+            <span className="mono text-xs text-muted-foreground">
+              {exc.untracked > 0 ? `${exc.untracked} older trades not tracked` : "peak / worst per contract"}
+            </span>
+          }
+        >
+          {!exc.tracked ? (
+            <p className="text-sm text-muted-foreground">
+              Peak-profit tracking starts with the next session. Trades closed before it was added don't
+              carry a peak value{exc.untracked > 0 ? ` (${exc.untracked} in this window).` : "."}
+            </p>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <Mini k="Losers Tracked" v={String(exc.tracked)} tone="" />
+                <Mini
+                  k="Ever In Profit"
+                  v={`${exc.everGreen} · ${((exc.everGreen / exc.tracked) * 100).toFixed(0)}%`}
+                  tone="text-bull"
+                />
+                <Mini k="Avg Peak" v={`${pts(exc.avgPeak)} pts`} tone="text-bull" />
+                <Mini k="Median Peak" v={`${pts(exc.medianPeak)} pts`} tone="" />
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                {exc.beyondRisk} of {exc.tracked} losing trades ran further in your favor than the amount
+                risked before reversing — those are the ones an earlier partial would have saved. Peaks are
+                per contract, measured from entry.
+              </p>
+            </>
+          )}
+        </Panel>
+      </div>
+
+
 
       <div className="mt-3">
         <Panel title="Closed Trades">

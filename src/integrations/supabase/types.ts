@@ -141,6 +141,9 @@ export type Database = {
           exit_time: string | null
           id: string
           kind: string
+          mae_points: number | null
+          mfe_points: number | null
+          mfe_time: string | null
           notes: string | null
           phase: string | null
           pivot: number | null
@@ -167,6 +170,9 @@ export type Database = {
           exit_time?: string | null
           id?: string
           kind: string
+          mae_points?: number | null
+          mfe_points?: number | null
+          mfe_time?: string | null
           notes?: string | null
           phase?: string | null
           pivot?: number | null
@@ -193,6 +199,9 @@ export type Database = {
           exit_time?: string | null
           id?: string
           kind?: string
+          mae_points?: number | null
+          mfe_points?: number | null
+          mfe_time?: string | null
           notes?: string | null
           phase?: string | null
           pivot?: number | null

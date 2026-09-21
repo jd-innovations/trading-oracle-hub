@@ -227,6 +227,19 @@ function SideBadge({ side, phase }: { side: "long" | "short"; phase: string | nu
   );
 }
 
+/** Peak favorable / worst adverse move per contract while the trade was open. */
+function Excursion({ e, className = "" }: { e: JournalEntry; className?: string }) {
+  if (e.mfe_points == null && e.mae_points == null) return null;
+  return (
+    <span className={`mono text-xs text-muted-foreground ${className}`}>
+      peak <span className="text-bull">+{Number(e.mfe_points ?? 0).toFixed(2)}</span>
+      {" / worst "}
+      <span className="text-bear">{Number(e.mae_points ?? 0).toFixed(2)}</span>
+      <span className="ml-1">pts/contract</span>
+    </span>
+  );
+}
+
 function JournalRow({ e }: { e: JournalEntry }) {
   if (e.kind === "trade") {
     const pnl = tradePnlUsd(e);
@@ -244,6 +257,7 @@ function JournalRow({ e }: { e: JournalEntry }) {
           <span className="ml-2 text-muted-foreground">
             {fmtTime(e.entry_time)}–{fmtTime(e.exit_time)}
           </span>
+          <Excursion e={e} className="ml-2" />
         </td>
         <td className={`mono px-3 py-2 text-right text-xs font-semibold ${Number(e.realized_points ?? 0) >= 0 ? "text-bull" : "text-bear"}`}>
           {fmtSigned(Number(e.realized_points ?? 0))}
@@ -313,6 +327,7 @@ function JournalCard({ e }: { e: JournalEntry }) {
           <span>{fmtTime(e.entry_time)} – {fmtTime(e.exit_time)} ET</span>
           <span>{e.contracts ? `${e.contracts}x` : ""}</span>
         </div>
+        <Excursion e={e} className="mt-1 block" />
       </div>
     );
   }
