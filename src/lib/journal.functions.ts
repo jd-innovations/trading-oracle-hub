@@ -48,6 +48,9 @@ const legInput = z.object({
   phase: z.enum(["closed_win", "stopped"]),
   realizedPoints: z.number(),
   contracts: z.number().int(),
+  mfe: z.number().optional(),
+  mae: z.number().optional(),
+  mfeTime: z.number().optional(),
 });
 
 export const logAutoTraderLeg = createServerFn({ method: "POST" })
@@ -77,6 +80,9 @@ export const logAutoTraderLeg = createServerFn({ method: "POST" })
           phase: data.phase,
           realized_points: data.realizedPoints,
           contracts: data.contracts,
+          mfe_points: data.mfe ?? null,
+          mae_points: data.mae ?? null,
+          mfe_time: data.mfeTime ? new Date(data.mfeTime * 1000).toISOString() : null,
           notes,
         },
         { onConflict: "user_id,symbol,plan_date,entry_time" },
