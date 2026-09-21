@@ -1,57 +1,36 @@
+# Auto-Trader Performance: report now, real data next
 
-## Goal
+## What the numbers say (Jul 23 – Sep 16, 2026)
 
-Auto-trader alerts post to Discord live during RTH regardless of whether anyone has the app open. Today the state machine only runs in the browser tab, so alerts stop the moment the tab closes.
+Pulled directly from the saved auto-trader sessions (44 completed trades across ES and NQ).
 
-## Approach
+| | Trades | Wins | Losses | Win rate | Net points | Avg / trade | Best | Worst |
+|---|---|---|---|---|---|---|---|---|
+| ES | 23 | 5 | 18 | 21.7% | -589.50 | -25.63 | +94.00 | -117.00 |
+| NQ | 21 | 6 | 15 | 28.6% | -3,391.50 | -161.50 | +495.00 | -452.25 |
+| Total | 44 | 11 | 33 | 25.0% | -3,981.00 | -90.48 | +495.00 | -452.25 |
 
-Move the auto-trader loop to the server. A pg_cron job hits a public TSS route once a minute during RTH; the route pulls fresh Schwab bars for ES and NQ, advances state stored in the database, and posts newly generated events to the existing Discord webhook. The browser hook keeps working for people watching the page but no longer owns the source of truth.
+Pattern: the strategy is stopping out roughly three times for every win. NQ wins are large (+450, +495) but the stop losses are consistently around -250 to -450, so the losers outweigh them. ES losses are small and steady (-24 to -48) but the wins are too small to offset them.
 
-## Changes
+Recent stretch (Sept): 9 trades, 1 win. The last win was NQ on Sep 4.
 
-### 1. New table `public.auto_trader_state`
-- Columns: `user_id uuid`, `symbol text`, `plan_date date`, `state jsonb` (the full `TradeState`), `posted_event_count int default 0`, `logged_leg_count int default 0`, `updated_at`.
-- Primary key `(user_id, symbol, plan_date)`.
-- Standard GRANTs; RLS: owner can select their row; writes only via `service_role` (the cron route).
+## Two problems found
 
-### 2. Extract pure state advance into a shared module
-- Move the per-bar loop currently inside `useAutoTrader` into a plain helper (`advanceForBars(state, plan, bars)`) already largely present in `src/lib/auto-trader/state.ts`. No behavior change — just make sure it's importable server-side without React.
+**1. The Journal is empty.** All 44 trades live only inside the daily auto-trader session records; not one made it into the Journal table. The save step relies on a duplicate-protection rule on the Journal table that was never created, so every save has been failing silently since the server-side auto-trader went live.
 
-### 3. New TSS route `src/routes/api/public/auto-trader/tick.ts`
-- POST, secured by `apikey` header (Supabase anon key) — matches the existing cron pattern.
-- For each of `ES` and `NQ`:
-  1. Load the Schwab owner id (`getSchwabOwnerUserId`) and today's plan row.
-  2. Load or initialize the `auto_trader_state` row for `(owner, symbol, plan_date)`.
-  3. Skip if state is terminal (`stopped` / `closed_win` in directional mode) or outside RTH.
-  4. Fetch recent Schwab 1-min bars (small lookback, e.g. last 2 hours).
-  5. Run `advanceForBars`.
-  6. For events beyond `posted_event_count`, POST each to the Discord webhook using the same formatting as `useAutoTrader` (`eventEmoji` + ET time + note).
-  7. For completed legs beyond `logged_leg_count`, insert into `journal_entries` (mirror of current client behavior).
-  8. Upsert the new state + counters.
-- Uses `supabaseAdmin` (loaded inside the handler) for state and journal writes; Discord webhook URL read from `process.env.DISCORD_WEBHOOK_URL`.
+**2. The Performance page is still showing sample numbers**, not the real results above.
 
-### 4. pg_cron schedule
-- Enable `pg_cron` + `pg_net` if not already.
-- Schedule `auto-trader-tick` every minute Mon–Fri 9:30–16:00 ET (`30-59 13 * * 1-5`, `* 14-19 * * 1-5`, `0 20 * * 1-5` — cron is UTC; will adjust for DST vs EST at implementation time; simplest is every minute weekday and let the route no-op outside RTH).
-- Body `{}`, header `apikey: <anon>`.
+## Plan
 
-### 5. Client hook cleanup
-- `useAutoTrader` keeps advancing locally for the on-screen display, but Discord posting and journal logging are gated off when a `serverAuthoritative` flag is set (default on). This prevents duplicate posts when both the tab and the server tick.
-- Add a small subscription (poll every ~30s or on focus) to `auto_trader_state` so the on-screen card reflects server truth rather than diverging local state.
-
-### 6. Not changed
-- Manual "Post" / "Test" buttons and the test-event button stay client-driven.
-- Plan generation and results grading stay as-is.
+1. Add the missing duplicate-protection rule to the Journal table.
+2. Backfill all 44 historical trades from the saved session records into the Journal, so the Journal and the report cover the full history from July 23 onward.
+3. Rebuild the Performance page on real data: win rate, net points, net dollars (ES x50, NQ x20), average win vs average loss, profit factor, max drawdown, per-symbol split, rolling windows (L5 / L10 / L20 / All), and an equity curve from actual closed trades.
+4. Add a "Copy report" button that produces a Discord-ready performance block in the existing house format.
 
 ## Technical notes
 
-- Discord posts from the cron route call `fetch(DISCORD_WEBHOOK_URL, …)` directly (same body shape as `discord.functions.ts`) — no need to route through a server fn.
-- The cron route is idempotent by design: `posted_event_count` and `logged_leg_count` prevent double-posts if a tick overlaps.
-- Every state mutation is a single upsert, so concurrent ticks (shouldn't happen with 1-min cadence, but safe) don't corrupt the row.
-- `supabaseAdmin` is imported inside the handler per the client.server rule.
-
-## Verification
-
-- Manually POST the tick route with the anon `apikey` after market open and confirm: DB row updated, at least a heartbeat log, no Discord spam when nothing changed.
-- Force an event by seeding a state row near a level and re-ticking; expect one Discord message.
-- Close the browser entirely, wait for cron, confirm live posts continue.
+- Add `unique (user_id, symbol, plan_date, entry_time)` on `journal_entries` — this is the `onConflict` target `src/routes/api/public/auto-trader/tick.ts` already passes, which is why the upsert currently errors and only logs a warning.
+- Backfill in the same migration: expand `auto_trader_state.state->'completedLegs'` and insert into `journal_entries` (fields: side, entry/exit price + label, entry/exit time, phase, realized, contracts 3).
+- Tighten the tick handler: treat a journal upsert error as a failure for that leg rather than incrementing `logged_leg_count`, so a future breakage is visible instead of silent.
+- Replace `perfWindows` / `equityCurve` mock imports in `src/routes/performance.tsx` with an authenticated server fn (`requireSupabaseAuth`) over `journal_entries`, consumed via `useQuery`.
+- `realized` is stored as total points for the position (3 contracts), not per-contract — the report labels it as such and derives dollars with `pointValueFor`.
