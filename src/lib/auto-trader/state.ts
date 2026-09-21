@@ -463,6 +463,9 @@ function closeLeg(
     ext1: undefined,
     realizedPoints: cumRealized,
     legRealized: 0,
+    mfe: 0,
+    mae: 0,
+    mfeTime: 0,
     completedLegs: leg ? [...s.completedLegs, leg] : s.completedLegs,
     events: [
       ...events,
