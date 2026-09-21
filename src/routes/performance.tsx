@@ -362,6 +362,44 @@ function PerfPage() {
       </div>
 
       <div className="mt-3">
+        <Panel
+          title="Losing Trades — How Far Into Profit?"
+          right={
+            <span className="mono text-xs text-muted-foreground">
+              {exc.untracked > 0 ? `${exc.untracked} older trades not tracked` : "peak / worst per contract"}
+            </span>
+          }
+        >
+          {!exc.tracked ? (
+            <p className="text-sm text-muted-foreground">
+              Peak-profit tracking starts with the next session. Trades closed before it was added don't
+              carry a peak value{exc.untracked > 0 ? ` (${exc.untracked} in this window).` : "."}
+            </p>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <Mini k="Losers Tracked" v={String(exc.tracked)} tone="" />
+                <Mini
+                  k="Ever In Profit"
+                  v={`${exc.everGreen} · ${((exc.everGreen / exc.tracked) * 100).toFixed(0)}%`}
+                  tone="text-bull"
+                />
+                <Mini k="Avg Peak" v={`${pts(exc.avgPeak)} pts`} tone="text-bull" />
+                <Mini k="Median Peak" v={`${pts(exc.medianPeak)} pts`} tone="" />
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                {exc.beyondRisk} of {exc.tracked} losing trades ran further in your favor than the amount
+                risked before reversing — those are the ones an earlier partial would have saved. Peaks are
+                per contract, measured from entry.
+              </p>
+            </>
+          )}
+        </Panel>
+      </div>
+
+
+
+      <div className="mt-3">
         <Panel title="Closed Trades">
           {!windowed.length ? (
             <p className="text-sm text-muted-foreground">Nothing to show.</p>
