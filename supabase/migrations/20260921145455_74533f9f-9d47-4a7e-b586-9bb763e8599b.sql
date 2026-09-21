@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS journal_entries_trade_unique ON public.journal_entries (user_id, symbol, plan_date, entry_time) WHERE entry_time IS NOT NULL;

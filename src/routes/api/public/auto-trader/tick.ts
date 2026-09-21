@@ -143,6 +143,7 @@ async function tickSymbol(symbol: SymbolId, webhook: string | undefined): Promis
 
   // Log newly completed legs to journal (bypassing RLS via service role).
   const newLegs: CompletedLeg[] = next.completedLegs.slice(loggedLegCount);
+  let loggedOk = 0;
   for (const leg of newLegs) {
     const { error: jErr } = await supabaseAdmin
       .from("journal_entries")
@@ -167,9 +168,16 @@ async function tickSymbol(symbol: SymbolId, webhook: string | undefined): Promis
         },
         { onConflict: "user_id,symbol,plan_date,entry_time" },
       );
-    if (jErr) console.warn(`[auto-trader/tick] ${symbol} journal upsert failed`, jErr);
+    if (jErr) {
+      // Stop counting here so the next tick retries this leg instead of
+      // silently skipping it forever.
+      console.error(`[auto-trader/tick] ${symbol} journal upsert failed`, jErr);
+      break;
+    }
+    loggedOk++;
   }
-  const newLoggedLegs = next.completedLegs.length;
+  const newLoggedLegs = loggedLegCount + loggedOk;
+
 
   // Persist updated state.
   const { error: upErr } = await supabaseAdmin
