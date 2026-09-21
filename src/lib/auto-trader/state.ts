@@ -252,6 +252,17 @@ export function advance(state: TradeState, plan: DailyPlanRow, bar: Bar): TradeS
 
   const isLong = s.side === "long";
 
+  // --------- Excursion tracking (before the stop check, so a bar that runs
+  // up and then stops out still records the run-up) ---------
+  if (s.entry != null) {
+    const favorable = isLong ? bar.high - s.entry : s.entry - bar.low;
+    const adverse = isLong ? bar.low - s.entry : s.entry - bar.high;
+    const prevMfe = s.mfe ?? 0;
+    if (favorable > prevMfe) s = { ...s, mfe: favorable, mfeTime: bar.time };
+    if (adverse < (s.mae ?? 0)) s = { ...s, mae: adverse };
+  }
+
+
   // --------- Stop-out ---------
   const stopHit = s.stop != null && (isLong ? bar.low <= s.stop : bar.high >= s.stop);
   if (stopHit && s.stop != null) {
