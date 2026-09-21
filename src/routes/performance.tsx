@@ -188,6 +188,7 @@ function PerfPage() {
   const stats = useMemo(() => computeStats(windowed), [windowed]);
   const esStats = useMemo(() => computeStats(windowed.filter((t) => t.symbol === "ES")), [windowed]);
   const nqStats = useMemo(() => computeStats(windowed.filter((t) => t.symbol === "NQ")), [windowed]);
+  const exc = useMemo(() => computeExcursions(windowed), [windowed]);
 
   const equity = useMemo(() => {
     let v = 0;
@@ -227,6 +228,9 @@ function PerfPage() {
       "",
       `Avg win: ${usd(stats.avgWinUsd)} · Avg loss: ${usd(stats.avgLossUsd)}`,
       `Profit factor: ${stats.profitFactor === null ? "—" : stats.profitFactor.toFixed(2)} · Max drawdown: -$${Math.round(stats.maxDdUsd).toLocaleString("en-US")}`,
+      exc.tracked
+        ? `Losers ever in profit: ${exc.everGreen}/${exc.tracked} · Avg peak: ${pts(exc.avgPeak)} pts/contract · Peak beat risk: ${exc.beyondRisk}`
+        : null,
       "@everyone",
     ]
       .filter(Boolean)
