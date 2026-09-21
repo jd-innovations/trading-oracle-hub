@@ -425,6 +425,9 @@ function closeLeg(
         exitTime: bar.time,
         phase: legPhase,
         realized: legRealizedFinal,
+        mfe: s.mfe ?? 0,
+        mae: s.mae ?? 0,
+        mfeTime: s.mfeTime ?? s.entryTime,
       }
     : null;
 
