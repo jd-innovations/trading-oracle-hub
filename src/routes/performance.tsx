@@ -99,6 +99,38 @@ function computeStats(trades: PerfTrade[]): Stats {
   };
 }
 
+interface Excursions {
+  tracked: number;
+  untracked: number;
+  everGreen: number;
+  avgPeak: number;
+  avgPeakWhenGreen: number;
+  beyondRisk: number;
+  medianPeak: number;
+}
+
+/** How far losing trades ran in your favor before they turned. */
+function computeExcursions(trades: PerfTrade[]): Excursions {
+  const losers = trades.filter((t) => t.phase !== "closed_win");
+  const tracked = losers.filter((t) => t.mfe_points != null);
+  const peaks = tracked.map((t) => Number(t.mfe_points ?? 0));
+  const green = peaks.filter((p) => p > 0);
+  const beyondRisk = tracked.filter((t) => {
+    const risk = Math.abs(Number(t.entry_price ?? 0) - Number(t.exit_price ?? 0));
+    return risk > 0 && Number(t.mfe_points ?? 0) >= risk;
+  }).length;
+  const sorted = [...peaks].sort((a, b) => a - b);
+  return {
+    tracked: tracked.length,
+    untracked: losers.length - tracked.length,
+    everGreen: green.length,
+    avgPeak: peaks.length ? peaks.reduce((a, b) => a + b, 0) / peaks.length : 0,
+    avgPeakWhenGreen: green.length ? green.reduce((a, b) => a + b, 0) / green.length : 0,
+    beyondRisk,
+    medianPeak: sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0,
+  };
+}
+
 function PerfPage() {
   const [windowKey, setWindowKey] = useState<WindowKey>("All");
   const [inst, setInst] = useState<Instrument>("All");
