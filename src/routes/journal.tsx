@@ -244,6 +244,7 @@ function JournalRow({ e }: { e: JournalEntry }) {
           <span className="ml-2 text-muted-foreground">
             {fmtTime(e.entry_time)}–{fmtTime(e.exit_time)}
           </span>
+          <Excursion e={e} className="ml-2" />
         </td>
         <td className={`mono px-3 py-2 text-right text-xs font-semibold ${Number(e.realized_points ?? 0) >= 0 ? "text-bull" : "text-bear"}`}>
           {fmtSigned(Number(e.realized_points ?? 0))}
@@ -313,6 +314,7 @@ function JournalCard({ e }: { e: JournalEntry }) {
           <span>{fmtTime(e.entry_time)} – {fmtTime(e.exit_time)} ET</span>
           <span>{e.contracts ? `${e.contracts}x` : ""}</span>
         </div>
+        <Excursion e={e} className="mt-1 block" />
       </div>
     );
   }
