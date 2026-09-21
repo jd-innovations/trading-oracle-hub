@@ -43,6 +43,12 @@ export interface CompletedLeg {
   exitTime: number; // unix seconds
   phase: "closed_win" | "stopped";
   realized: number;
+  /** Max favorable excursion from entry, per contract, in points (>= 0). */
+  mfe?: number;
+  /** Max adverse excursion from entry, per contract, in points (<= 0). */
+  mae?: number;
+  /** Unix seconds of the bar where MFE peaked. */
+  mfeTime?: number;
 }
 
 export interface TradeState {
@@ -69,6 +75,12 @@ export interface TradeState {
   realizedPoints: number;
   /** Realized P/L for the leg currently open (or the one just closed until it's committed). */
   legRealized: number;
+  /** Running max favorable excursion for the open leg, per contract, in points. */
+  mfe: number;
+  /** Running max adverse excursion for the open leg, per contract, in points (<= 0). */
+  mae: number;
+  /** Bar time where the running MFE peaked. */
+  mfeTime: number;
   completedLegs: CompletedLeg[];
 }
 
