@@ -436,6 +436,7 @@ function PerfPage() {
           )}
         </Panel>
       </div>
+      <TradeDetailSheet trade={sel} onClose={() => setSel(null)} />
     </AppShell>
   );
 }
