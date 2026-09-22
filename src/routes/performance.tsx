@@ -7,6 +7,7 @@ import { EquityChart } from "@/components/charts/Charts";
 import { listPerfTrades, type PerfTrade } from "@/lib/performance.functions";
 import { pointValueFor } from "@/lib/symbols";
 import { supabase } from "@/integrations/supabase/client";
+import { TradeDetailSheet, type TradeDetailTarget } from "@/components/trade/TradeDetailSheet";
 
 export const Route = createFileRoute("/performance")({
   head: () => ({
