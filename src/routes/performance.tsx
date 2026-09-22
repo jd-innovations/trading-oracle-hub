@@ -73,7 +73,7 @@ function perfToTarget(t: PerfTrade): TradeDetailTarget {
     entryPrice: t.entry_price != null ? Number(t.entry_price) : null,
     exitLabel: t.exit_label,
     exitPrice: t.exit_price != null ? Number(t.exit_price) : null,
-    entryTime: null,
+    entryTime: t.entry_time,
     exitTime: t.exit_time,
     phase: t.phase,
     realizedPoints: t.realized_points != null ? Number(t.realized_points) : null,
