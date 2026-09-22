@@ -86,6 +86,38 @@ export interface TradeState {
 
 const CONTRACTS = 3;
 
+/** User-tunable auto-trader rules. */
+export interface AutoTraderConfig {
+  /** ET clock time ("HH:MM") before which no new entries are taken. "09:30" = off. */
+  coolOffEt: string;
+  /** Move the stop to break-even once price runs this % of the way to Target 1. 0 = off. */
+  earlyStopPct: number;
+}
+
+export const DEFAULT_CONFIG: AutoTraderConfig = { coolOffEt: "09:35", earlyStopPct: 50 };
+
+export const COOL_OFF_OPTIONS = ["09:30", "09:35", "09:40", "09:45"] as const;
+export const EARLY_STOP_OPTIONS = [0, 33, 50, 75] as const;
+
+/** Minutes since ET midnight for an "HH:MM" string. */
+function etMinutesFromLabel(label: string): number {
+  const [h, m] = label.split(":").map((n) => parseInt(n, 10));
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return 9 * 60 + 30;
+  return h * 60 + m;
+}
+
+/** Minutes since ET midnight for a bar timestamp. */
+export function etMinutesOfBar(t: number): number {
+  const d = new Date(t * 1000);
+  const h = (d.getUTCHours() - ET_OFFSET_HOURS + 24) % 24;
+  return h * 60 + d.getUTCMinutes();
+}
+
+/** True while the opening cool-off window is still in effect for this bar. */
+export function inCoolOff(t: number, config: AutoTraderConfig): boolean {
+  return etMinutesOfBar(t) < etMinutesFromLabel(config.coolOffEt);
+}
+
 export function initialState(plan: DailyPlanRow, symbol: "ES" | "NQ"): TradeState {
   const mode: Mode = plan.bias === "Neutral" ? "neutral" : "directional";
   const side: Side | undefined =
@@ -161,7 +193,12 @@ function pickShortEntry(pool: Level[], bar: Bar): Level | null {
 }
 
 /** Advance the state by a single bar. Returns the updated state (no mutation). */
-export function advance(state: TradeState, plan: DailyPlanRow, bar: Bar): TradeState {
+export function advance(
+  state: TradeState,
+  plan: DailyPlanRow,
+  bar: Bar,
+  config: AutoTraderConfig = DEFAULT_CONFIG,
+): TradeState {
   // Terminal phases block only in directional mode. Neutral re-arms.
   if (state.phase === "disabled") return state;
   if (state.mode === "directional" && (state.phase === "stopped" || state.phase === "closed_win")) return state;
@@ -173,6 +210,9 @@ export function advance(state: TradeState, plan: DailyPlanRow, bar: Bar): TradeS
   let s: TradeState = { ...state, lastBarTime: bar.time, events: state.events };
 
   // --------- Entry ---------
+  // Opening cool-off: track price but take no new entries before the cutoff.
+  if (s.phase === "armed" && inCoolOff(bar.time, config)) return s;
+
   if (s.phase === "armed") {
     let entryLevel: Level | null = null;
     let chosenSide: Side | null = null;
@@ -293,6 +333,41 @@ export function advance(state: TradeState, plan: DailyPlanRow, bar: Bar): TradeS
       events,
       bar,
     });
+  }
+
+  // --------- Early break-even (excursion-based) ---------
+  // Before any scale-out, once the run-up reaches `earlyStopPct` of the way to
+  // Target 1, pull the stop to entry so a stalled winner no longer becomes a
+  // full 3-contract loser. Runs after the stop check so the original stop wins
+  // on a bar that hits both.
+  if (
+    config.earlyStopPct > 0 &&
+    s.scaled === 0 &&
+    s.stopLabel !== "BE" &&
+    s.entry != null &&
+    s.ladderAhead.length > 0
+  ) {
+    const t1 = s.ladderAhead[0];
+    const distance = Math.abs(t1.price - s.entry);
+    const trigger = (config.earlyStopPct / 100) * distance;
+    const improves = s.stop == null || (isLong ? s.entry > s.stop : s.entry < s.stop);
+    if (distance > 0 && (s.mfe ?? 0) >= trigger && improves) {
+      s = {
+        ...s,
+        stop: s.entry,
+        stopLabel: "BE",
+        events: [
+          ...s.events,
+          {
+            kind: "stop_moved",
+            time: bar.time,
+            price: s.entry,
+            label: "BE",
+            note: `Early BE: +${(s.mfe ?? 0).toFixed(2)} pts (${config.earlyStopPct}% to ${t1.label}) · stop → BE ${s.entry.toFixed(2)}`,
+          },
+        ],
+      };
+    }
   }
 
   // --------- Profit-direction acceptance sweep ---------
@@ -474,10 +549,15 @@ function closeLeg(
   };
 }
 
-export function replay(state: TradeState, plan: DailyPlanRow, bars: Bar[]): TradeState {
+export function replay(
+  state: TradeState,
+  plan: DailyPlanRow,
+  bars: Bar[],
+  config: AutoTraderConfig = DEFAULT_CONFIG,
+): TradeState {
   let s = state;
   for (const b of bars) {
-    s = advance(s, plan, b);
+    s = advance(s, plan, b, config);
     if (s.mode === "directional" && (s.phase === "stopped" || s.phase === "closed_win")) break;
   }
   return s;

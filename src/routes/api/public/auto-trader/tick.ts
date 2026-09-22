@@ -7,7 +7,7 @@
 // reachable without a user session.
 
 import { createFileRoute } from "@tanstack/react-router";
-import { advance, initialState, isRthBar, type TradeState, type Bar, type CompletedLeg } from "@/lib/auto-trader/state";
+import { advance, initialState, isRthBar, DEFAULT_CONFIG, type AutoTraderConfig, type TradeState, type Bar, type CompletedLeg } from "@/lib/auto-trader/state";
 import type { SymbolId } from "@/lib/symbols";
 import type { DailyPlanRow } from "@/lib/plans.functions";
 
@@ -68,6 +68,20 @@ async function tickSymbol(symbol: SymbolId, webhook: string | undefined): Promis
   const sym = getSymbol(symbol);
   const todayET = new Date(Date.now() - 4 * 3600 * 1000).toISOString().slice(0, 10);
 
+  // Owner's saved rules (opening cool-off + early break-even threshold).
+  let config: AutoTraderConfig = DEFAULT_CONFIG;
+  const { data: cfgRow } = await supabaseAdmin
+    .from("auto_trader_settings")
+    .select("cool_off_et, early_stop_pct")
+    .eq("user_id", ownerId)
+    .maybeSingle();
+  if (cfgRow) {
+    config = {
+      coolOffEt: cfgRow.cool_off_et ?? DEFAULT_CONFIG.coolOffEt,
+      earlyStopPct: cfgRow.early_stop_pct ?? DEFAULT_CONFIG.earlyStopPct,
+    };
+  }
+
   // Load today's plan for this symbol.
   const { data: planRows, error: planErr } = await supabaseAdmin
     .from("daily_plans")
@@ -127,7 +141,7 @@ async function tickSymbol(symbol: SymbolId, webhook: string | undefined): Promis
       next = { ...next, lastBarTime: bar.time };
       continue;
     }
-    next = advance(next, plan, bar);
+    next = advance(next, plan, bar, config);
     advancedBars++;
   }
 

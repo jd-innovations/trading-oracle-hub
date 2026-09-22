@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { Copy, Check, Power, RotateCcw, Send, BellOff, Bell, Zap } from "lucide-react";
+import { Copy, Check, Power, RotateCcw, Send, BellOff, Bell, Zap, Settings2, Clock } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
 import { Panel } from "@/components/layout/AppShell";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { fmtPrice } from "@/lib/format";
 import { useAutoTrader } from "@/lib/auto-trader/use-auto-trader";
+import { DEFAULT_CONFIG, COOL_OFF_OPTIONS, EARLY_STOP_OPTIONS, type AutoTraderConfig } from "@/lib/auto-trader/state";
+import { getAutoTraderSettings, saveAutoTraderSettings } from "@/lib/auto-trader-settings.functions";
 import { loadAutoPostTrades, saveAutoPostTrades, sendToDiscord } from "@/lib/discord-client";
 import type { DailyPlanRow } from "@/lib/plans.functions";
 import type { Candle } from "@/lib/chart-utils";
@@ -45,7 +51,25 @@ export function TradeCard({
   symbol: SymbolId;
   livePrice?: number;
 }) {
-  const { state, enabled, setEnabled, reset, disabledReason, diag } = useAutoTrader(plan, bars, symbol);
+  const qc = useQueryClient();
+  const fetchSettings = useServerFn(getAutoTraderSettings);
+  const persistSettings = useServerFn(saveAutoTraderSettings);
+  const settingsQuery = useQuery({
+    queryKey: ["auto-trader-settings"],
+    queryFn: () => fetchSettings(),
+    staleTime: 60_000,
+  });
+  const config: AutoTraderConfig = settingsQuery.data ?? DEFAULT_CONFIG;
+  const saveSettings = useMutation({
+    mutationFn: (next: AutoTraderConfig) => persistSettings({ data: next }),
+    onSuccess: (next) => {
+      qc.setQueryData(["auto-trader-settings"], next);
+      toast.success("Auto-trader rules saved.");
+    },
+    onError: () => toast.error("Couldn't save those rules — try again."),
+  });
+
+  const { state, enabled, setEnabled, reset, disabledReason, diag, coolOffActive } = useAutoTrader(plan, bars, symbol, config);
   const [copied, setCopied] = useState(false);
   const [autoPost, setAutoPost] = useState<boolean>(() => loadAutoPostTrades());
   useEffect(() => { saveAutoPostTrades(autoPost); }, [autoPost]);
@@ -90,6 +114,13 @@ export function TradeCard({
     if (!enabled) return { short: "OFF", long: "DISABLED", tone: "text-muted-foreground border-border" };
     if (!plan) return { short: "NO PLAN", long: "NO PLAN", tone: "text-muted-foreground border-border" };
     if (!state) return { short: "INIT…", long: "INIT…", tone: "text-muted-foreground border-border" };
+    if (coolOffActive) {
+      return {
+        short: `COOL-OFF · ${config.coolOffEt}`,
+        long: `COOL-OFF · no entries until ${config.coolOffEt} ET`,
+        tone: "text-amber-500 border-amber-500/40 bg-amber-500/10",
+      };
+    }
     const armTone = "text-emerald-500 border-emerald-500/40 bg-emerald-500/10";
     const bullTone = "text-bull border-bull/40 bg-bull/10";
     const bearTone = "text-bear border-bear/40 bg-bear/10";
@@ -120,6 +151,66 @@ export function TradeCard({
         <span className="sm:hidden">{statusPill.short}</span>
         <span className="hidden sm:inline">{statusPill.long}</span>
       </span>
+      <Popover>
+        <PopoverTrigger asChild>
+          <button
+            className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-2 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
+            title="Entry and stop rules"
+          >
+            <Settings2 className="h-3 w-3" /> <span className="hidden sm:inline">Rules</span>
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-72 space-y-4">
+          <div>
+            <div className="label-xs mb-1 flex items-center gap-1">
+              <Clock className="h-3 w-3" /> Opening cool-off
+            </div>
+            <p className="mb-2 text-[11px] leading-snug text-muted-foreground">
+              No new entries before this time. The engine still tracks price and levels.
+            </p>
+            <div className="grid grid-cols-4 gap-1">
+              {COOL_OFF_OPTIONS.map((opt) => (
+                <button
+                  key={opt}
+                  onClick={() => saveSettings.mutate({ ...config, coolOffEt: opt })}
+                  className={`mono rounded-md border px-1 py-1 text-[10px] font-semibold ${
+                    config.coolOffEt === opt
+                      ? "border-amber-500/50 bg-amber-500/10 text-amber-500"
+                      : "border-border bg-surface-2 text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {opt === "09:30" ? "Off" : opt}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div className="label-xs mb-1">Early break-even</div>
+            <p className="mb-2 text-[11px] leading-snug text-muted-foreground">
+              Move the stop to entry once the trade runs this far toward Target 1.
+            </p>
+            <div className="grid grid-cols-4 gap-1">
+              {EARLY_STOP_OPTIONS.map((pct) => (
+                <button
+                  key={pct}
+                  onClick={() => saveSettings.mutate({ ...config, earlyStopPct: pct })}
+                  className={`mono rounded-md border px-1 py-1 text-[10px] font-semibold ${
+                    config.earlyStopPct === pct
+                      ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-500"
+                      : "border-border bg-surface-2 text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {pct === 0 ? "Off" : `${pct}%`}
+                </button>
+              ))}
+            </div>
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            Defaults: 09:35 ET cool-off, break-even at 50% to Target 1. These rules apply to the
+            background runner too.
+          </p>
+        </PopoverContent>
+      </Popover>
       <button
         onClick={() => setEnabled(!enabled)}
         className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-2 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"

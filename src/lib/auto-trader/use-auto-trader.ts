@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { advance, initialState, isRthBar, type TradeState, type Bar } from "./state";
+import { advance, initialState, isRthBar, inCoolOff, DEFAULT_CONFIG, type AutoTraderConfig, type TradeState, type Bar } from "./state";
 import { buildLadder, entryPool } from "./levels";
 import type { DailyPlanRow } from "@/lib/plans.functions";
 import type { Candle } from "@/lib/chart-utils";
@@ -92,6 +92,8 @@ export interface UseAutoTraderResult {
   reset: () => void;
   disabledReason: string | null;
   diag: AutoTraderDiag | null;
+  /** True while the opening cool-off window is still blocking new entries. */
+  coolOffActive: boolean;
 }
 
 function etDateKey(t: number): string {
@@ -106,6 +108,7 @@ export function useAutoTrader(
   plan: DailyPlanRow | null,
   bars: Candle[],
   symbol: SymbolId,
+  config: AutoTraderConfig = DEFAULT_CONFIG,
 ): UseAutoTraderResult {
   const [enabled, setEnabledState] = useState<boolean>(() => loadEnabled());
   const [state, setState] = useState<TradeState | null>(null);
@@ -180,7 +183,7 @@ export function useAutoTrader(
         );
       }
 
-      next = advance(next, plan, bar);
+      next = advance(next, plan, bar, config);
     }
     if (next !== cur) {
       changed = true;
@@ -207,7 +210,15 @@ export function useAutoTrader(
       setState(next);
       persist(next);
     }
-  }, [bars, plan, enabled, symbol]);
+  }, [bars, plan, enabled, symbol, config.coolOffEt, config.earlyStopPct]);
+
+  // True while the opening cool-off window still blocks new entries.
+  const coolOffActive = useMemo(() => {
+    if (!state || state.phase !== "armed") return false;
+    const last = bars.length ? bars[bars.length - 1].time : Math.floor(Date.now() / 1000);
+    if (!isRthBar(last)) return false;
+    return inCoolOff(last, config);
+  }, [state, bars, config]);
 
   // Live diagnostic: closest approach per pool level today.
   const diag = useMemo<AutoTraderDiag | null>(() => {
@@ -289,5 +300,5 @@ export function useAutoTrader(
     };
   }, [plan, state, bars, symbol]);
 
-  return { state, enabled, setEnabled, reset, disabledReason, diag };
+  return { state, enabled, setEnabled, reset, disabledReason, diag, coolOffActive };
 }
