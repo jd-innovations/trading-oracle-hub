@@ -92,6 +92,8 @@ export interface UseAutoTraderResult {
   reset: () => void;
   disabledReason: string | null;
   diag: AutoTraderDiag | null;
+  /** True while the opening cool-off window is still blocking new entries. */
+  coolOffActive: boolean;
 }
 
 function etDateKey(t: number): string {
