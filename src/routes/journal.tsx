@@ -200,6 +200,7 @@ function JournalPage() {
           </table>
         </div>
       </div>
+      <TradeDetailSheet trade={sel} onClose={() => setSel(null)} />
     </AppShell>
   );
 }
