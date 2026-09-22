@@ -7,7 +7,7 @@
 // reachable without a user session.
 
 import { createFileRoute } from "@tanstack/react-router";
-import { advance, initialState, isRthBar, type TradeState, type Bar, type CompletedLeg } from "@/lib/auto-trader/state";
+import { advance, initialState, isRthBar, DEFAULT_CONFIG, type AutoTraderConfig, type TradeState, type Bar, type CompletedLeg } from "@/lib/auto-trader/state";
 import type { SymbolId } from "@/lib/symbols";
 import type { DailyPlanRow } from "@/lib/plans.functions";
 
