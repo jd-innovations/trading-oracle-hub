@@ -141,7 +141,7 @@ async function tickSymbol(symbol: SymbolId, webhook: string | undefined): Promis
       next = { ...next, lastBarTime: bar.time };
       continue;
     }
-    next = advance(next, plan, bar);
+    next = advance(next, plan, bar, config);
     advancedBars++;
   }
 
