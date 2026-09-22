@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { Copy, Check, Power, RotateCcw, Send, BellOff, Bell, Zap } from "lucide-react";
+import { Copy, Check, Power, RotateCcw, Send, BellOff, Bell, Zap, Settings2, Clock } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
 import { Panel } from "@/components/layout/AppShell";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { fmtPrice } from "@/lib/format";
 import { useAutoTrader } from "@/lib/auto-trader/use-auto-trader";
+import { DEFAULT_CONFIG, COOL_OFF_OPTIONS, EARLY_STOP_OPTIONS, type AutoTraderConfig } from "@/lib/auto-trader/state";
+import { getAutoTraderSettings, saveAutoTraderSettings } from "@/lib/auto-trader-settings.functions";
 import { loadAutoPostTrades, saveAutoPostTrades, sendToDiscord } from "@/lib/discord-client";
 import type { DailyPlanRow } from "@/lib/plans.functions";
 import type { Candle } from "@/lib/chart-utils";
