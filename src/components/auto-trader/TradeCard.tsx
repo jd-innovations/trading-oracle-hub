@@ -114,6 +114,13 @@ export function TradeCard({
     if (!enabled) return { short: "OFF", long: "DISABLED", tone: "text-muted-foreground border-border" };
     if (!plan) return { short: "NO PLAN", long: "NO PLAN", tone: "text-muted-foreground border-border" };
     if (!state) return { short: "INIT…", long: "INIT…", tone: "text-muted-foreground border-border" };
+    if (coolOffActive) {
+      return {
+        short: `COOL-OFF · ${config.coolOffEt}`,
+        long: `COOL-OFF · no entries until ${config.coolOffEt} ET`,
+        tone: "text-amber-500 border-amber-500/40 bg-amber-500/10",
+      };
+    }
     const armTone = "text-emerald-500 border-emerald-500/40 bg-emerald-500/10";
     const bullTone = "text-bull border-bull/40 bg-bull/10";
     const bearTone = "text-bear border-bear/40 bg-bear/10";
