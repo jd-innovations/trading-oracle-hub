@@ -549,10 +549,15 @@ function closeLeg(
   };
 }
 
-export function replay(state: TradeState, plan: DailyPlanRow, bars: Bar[]): TradeState {
+export function replay(
+  state: TradeState,
+  plan: DailyPlanRow,
+  bars: Bar[],
+  config: AutoTraderConfig = DEFAULT_CONFIG,
+): TradeState {
   let s = state;
   for (const b of bars) {
-    s = advance(s, plan, b);
+    s = advance(s, plan, b, config);
     if (s.mode === "directional" && (s.phase === "stopped" || s.phase === "closed_win")) break;
   }
   return s;
