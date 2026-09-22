@@ -151,6 +151,66 @@ export function TradeCard({
         <span className="sm:hidden">{statusPill.short}</span>
         <span className="hidden sm:inline">{statusPill.long}</span>
       </span>
+      <Popover>
+        <PopoverTrigger asChild>
+          <button
+            className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-2 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
+            title="Entry and stop rules"
+          >
+            <Settings2 className="h-3 w-3" /> <span className="hidden sm:inline">Rules</span>
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-72 space-y-4">
+          <div>
+            <div className="label-xs mb-1 flex items-center gap-1">
+              <Clock className="h-3 w-3" /> Opening cool-off
+            </div>
+            <p className="mb-2 text-[11px] leading-snug text-muted-foreground">
+              No new entries before this time. The engine still tracks price and levels.
+            </p>
+            <div className="grid grid-cols-4 gap-1">
+              {COOL_OFF_OPTIONS.map((opt) => (
+                <button
+                  key={opt}
+                  onClick={() => saveSettings.mutate({ ...config, coolOffEt: opt })}
+                  className={`mono rounded-md border px-1 py-1 text-[10px] font-semibold ${
+                    config.coolOffEt === opt
+                      ? "border-amber-500/50 bg-amber-500/10 text-amber-500"
+                      : "border-border bg-surface-2 text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {opt === "09:30" ? "Off" : opt}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div className="label-xs mb-1">Early break-even</div>
+            <p className="mb-2 text-[11px] leading-snug text-muted-foreground">
+              Move the stop to entry once the trade runs this far toward Target 1.
+            </p>
+            <div className="grid grid-cols-4 gap-1">
+              {EARLY_STOP_OPTIONS.map((pct) => (
+                <button
+                  key={pct}
+                  onClick={() => saveSettings.mutate({ ...config, earlyStopPct: pct })}
+                  className={`mono rounded-md border px-1 py-1 text-[10px] font-semibold ${
+                    config.earlyStopPct === pct
+                      ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-500"
+                      : "border-border bg-surface-2 text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {pct === 0 ? "Off" : `${pct}%`}
+                </button>
+              ))}
+            </div>
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            Defaults: 09:35 ET cool-off, break-even at 50% to Target 1. These rules apply to the
+            background runner too.
+          </p>
+        </PopoverContent>
+      </Popover>
       <button
         onClick={() => setEnabled(!enabled)}
         className="inline-flex items-center gap-1 rounded-md border border-border bg-surface-2 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
