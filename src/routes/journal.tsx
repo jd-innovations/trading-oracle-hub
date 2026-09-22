@@ -39,6 +39,26 @@ function tradePnlUsd(e: JournalEntry): number {
   return pts * pointValueFor(e.symbol);
 }
 
+function toTarget(e: JournalEntry): TradeDetailTarget {
+  return {
+    symbol: e.symbol,
+    planDate: e.plan_date,
+    side: e.side,
+    entryLabel: e.entry_label,
+    entryPrice: e.entry_price != null ? Number(e.entry_price) : null,
+    exitLabel: e.exit_label,
+    exitPrice: e.exit_price != null ? Number(e.exit_price) : null,
+    entryTime: e.entry_time,
+    exitTime: e.exit_time,
+    phase: e.phase,
+    realizedPoints: e.realized_points != null ? Number(e.realized_points) : null,
+    contracts: e.contracts,
+    mfe: e.mfe_points != null ? Number(e.mfe_points) : null,
+    mae: e.mae_points != null ? Number(e.mae_points) : null,
+    mfeTime: e.mfe_time,
+  };
+}
+
 function JournalPage() {
   const [inst, setInst] = useState<Instrument>("All");
   const [sel, setSel] = useState<TradeDetailTarget | null>(null);
