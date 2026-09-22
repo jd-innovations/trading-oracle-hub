@@ -7,6 +7,7 @@ import { EquityChart } from "@/components/charts/Charts";
 import { listPerfTrades, type PerfTrade } from "@/lib/performance.functions";
 import { pointValueFor } from "@/lib/symbols";
 import { supabase } from "@/integrations/supabase/client";
+import { TradeDetailSheet, type TradeDetailTarget } from "@/components/trade/TradeDetailSheet";
 
 export const Route = createFileRoute("/performance")({
   head: () => ({
@@ -61,6 +62,26 @@ interface Stats {
 
 function tradeUsd(t: PerfTrade): number {
   return Number(t.realized_points ?? 0) * pointValueFor(t.symbol);
+}
+
+function perfToTarget(t: PerfTrade): TradeDetailTarget {
+  return {
+    symbol: t.symbol,
+    planDate: t.plan_date,
+    side: t.side,
+    entryLabel: t.entry_label,
+    entryPrice: t.entry_price != null ? Number(t.entry_price) : null,
+    exitLabel: t.exit_label,
+    exitPrice: t.exit_price != null ? Number(t.exit_price) : null,
+    entryTime: t.entry_time,
+    exitTime: t.exit_time,
+    phase: t.phase,
+    realizedPoints: t.realized_points != null ? Number(t.realized_points) : null,
+    contracts: t.contracts,
+    mfe: t.mfe_points != null ? Number(t.mfe_points) : null,
+    mae: t.mae_points != null ? Number(t.mae_points) : null,
+    mfeTime: t.mfe_time,
+  };
 }
 
 function computeStats(trades: PerfTrade[]): Stats {
@@ -133,6 +154,7 @@ function computeExcursions(trades: PerfTrade[]): Excursions {
 
 function PerfPage() {
   const [windowKey, setWindowKey] = useState<WindowKey>("All");
+  const [sel, setSel] = useState<TradeDetailTarget | null>(null);
   const [inst, setInst] = useState<Instrument>("All");
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [trades, setTrades] = useState<PerfTrade[]>([]);
@@ -410,7 +432,13 @@ function PerfPage() {
                 return (
                   <div
                     key={`${t.plan_date}-${t.symbol}-${i}`}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-surface-1 px-3 py-2"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSel(perfToTarget(t))}
+                    onKeyDown={(ev) => {
+                      if (ev.key === "Enter" || ev.key === " ") setSel(perfToTarget(t));
+                    }}
+                    className="flex cursor-pointer flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-surface-1 px-3 py-2 hover:border-info/40 hover:bg-surface-2"
                   >
                     <div className="mono flex items-center gap-2 text-xs">
                       <span className="font-bold">{fmtDate(t.plan_date)}</span>
@@ -429,6 +457,7 @@ function PerfPage() {
           )}
         </Panel>
       </div>
+      <TradeDetailSheet trade={sel} onClose={() => setSel(null)} />
     </AppShell>
   );
 }

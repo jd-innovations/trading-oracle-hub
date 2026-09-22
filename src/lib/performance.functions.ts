@@ -9,6 +9,7 @@ export interface PerfTrade {
   exit_price: number | null;
   entry_label: string | null;
   exit_label: string | null;
+  entry_time: string | null;
   exit_time: string | null;
   phase: "closed_win" | "stopped" | null;
   realized_points: number | null;
@@ -26,7 +27,7 @@ export const listPerfTrades = createServerFn({ method: "GET" })
     const { data, error } = await supabase
       .from("journal_entries")
       .select(
-        "plan_date, symbol, side, entry_price, exit_price, entry_label, exit_label, exit_time, phase, realized_points, contracts, mfe_points, mae_points, mfe_time",
+        "plan_date, symbol, side, entry_price, exit_price, entry_label, exit_label, entry_time, exit_time, phase, realized_points, contracts, mfe_points, mae_points, mfe_time",
       )
       .eq("user_id", userId)
       .eq("kind", "trade")

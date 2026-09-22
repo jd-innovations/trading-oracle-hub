@@ -6,6 +6,7 @@ import { fmtSigned, fmtPrice } from "@/lib/format";
 import { listJournal, type JournalEntry } from "@/lib/journal.functions";
 import { pointValueFor } from "@/lib/symbols";
 import { supabase } from "@/integrations/supabase/client";
+import { TradeDetailSheet, type TradeDetailTarget } from "@/components/trade/TradeDetailSheet";
 
 export const Route = createFileRoute("/journal")({
   head: () => ({
@@ -38,8 +39,29 @@ function tradePnlUsd(e: JournalEntry): number {
   return pts * pointValueFor(e.symbol);
 }
 
+function toTarget(e: JournalEntry): TradeDetailTarget {
+  return {
+    symbol: e.symbol,
+    planDate: e.plan_date,
+    side: e.side,
+    entryLabel: e.entry_label,
+    entryPrice: e.entry_price != null ? Number(e.entry_price) : null,
+    exitLabel: e.exit_label,
+    exitPrice: e.exit_price != null ? Number(e.exit_price) : null,
+    entryTime: e.entry_time,
+    exitTime: e.exit_time,
+    phase: e.phase,
+    realizedPoints: e.realized_points != null ? Number(e.realized_points) : null,
+    contracts: e.contracts,
+    mfe: e.mfe_points != null ? Number(e.mfe_points) : null,
+    mae: e.mae_points != null ? Number(e.mae_points) : null,
+    mfeTime: e.mfe_time,
+  };
+}
+
 function JournalPage() {
   const [inst, setInst] = useState<Instrument>("All");
+  const [sel, setSel] = useState<TradeDetailTarget | null>(null);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [authed, setAuthed] = useState<boolean | null>(null);
@@ -159,7 +181,7 @@ function JournalPage() {
       {/* Mobile: card list */}
       <div className="mt-3 space-y-2 md:hidden">
         {rows.map((r) => (
-          <JournalCard key={r.id} e={r} />
+          <JournalCard key={r.id} e={r} onSelect={(x) => setSel(toTarget(x))} />
         ))}
         {rows.length === 0 && (
           <div className="rounded-lg border border-border bg-card px-3 py-8 text-center text-sm text-muted-foreground">
@@ -186,7 +208,7 @@ function JournalPage() {
             </thead>
             <tbody className="divide-y divide-border">
               {rows.map((r) => (
-                <JournalRow key={r.id} e={r} />
+                <JournalRow key={r.id} e={r} onSelect={(x) => setSel(toTarget(x))} />
               ))}
               {rows.length === 0 && (
                 <tr>
@@ -199,6 +221,7 @@ function JournalPage() {
           </table>
         </div>
       </div>
+      <TradeDetailSheet trade={sel} onClose={() => setSel(null)} />
     </AppShell>
   );
 }
@@ -240,11 +263,11 @@ function Excursion({ e, className = "" }: { e: JournalEntry; className?: string 
   );
 }
 
-function JournalRow({ e }: { e: JournalEntry }) {
+function JournalRow({ e, onSelect }: { e: JournalEntry; onSelect?: (e: JournalEntry) => void }) {
   if (e.kind === "trade") {
     const pnl = tradePnlUsd(e);
     return (
-      <tr className="hover:bg-surface-1/60">
+      <tr className="cursor-pointer hover:bg-surface-1/60" onClick={() => onSelect?.(e)}>
         <td className="mono whitespace-nowrap px-3 py-2 text-xs">{fmtDate(e.plan_date)}</td>
         <td className="px-3 py-2"><SymbolChip s={e.symbol} /></td>
         <td className="px-3 py-2 text-xs">
@@ -298,11 +321,17 @@ function JournalRow({ e }: { e: JournalEntry }) {
   );
 }
 
-function JournalCard({ e }: { e: JournalEntry }) {
+function JournalCard({ e, onSelect }: { e: JournalEntry; onSelect?: (e: JournalEntry) => void }) {
   if (e.kind === "trade") {
     const pnl = tradePnlUsd(e);
     return (
-      <div className="rounded-lg border border-border bg-card p-3">
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => onSelect?.(e)}
+        onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") onSelect?.(e); }}
+        className="cursor-pointer rounded-lg border border-border bg-card p-3 active:bg-surface-1"
+      >
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
             <span className="mono text-xs text-muted-foreground">{fmtDate(e.plan_date)}</span>
