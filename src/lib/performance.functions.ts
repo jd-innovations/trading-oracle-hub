@@ -9,6 +9,7 @@ export interface PerfTrade {
   exit_price: number | null;
   entry_label: string | null;
   exit_label: string | null;
+  entry_time: string | null;
   exit_time: string | null;
   phase: "closed_win" | "stopped" | null;
   realized_points: number | null;
