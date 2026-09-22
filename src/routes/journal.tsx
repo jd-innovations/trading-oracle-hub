@@ -6,6 +6,7 @@ import { fmtSigned, fmtPrice } from "@/lib/format";
 import { listJournal, type JournalEntry } from "@/lib/journal.functions";
 import { pointValueFor } from "@/lib/symbols";
 import { supabase } from "@/integrations/supabase/client";
+import { TradeDetailSheet, type TradeDetailTarget } from "@/components/trade/TradeDetailSheet";
 
 export const Route = createFileRoute("/journal")({
   head: () => ({
