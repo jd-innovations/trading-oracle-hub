@@ -335,6 +335,41 @@ export function advance(
     });
   }
 
+  // --------- Early break-even (excursion-based) ---------
+  // Before any scale-out, once the run-up reaches `earlyStopPct` of the way to
+  // Target 1, pull the stop to entry so a stalled winner no longer becomes a
+  // full 3-contract loser. Runs after the stop check so the original stop wins
+  // on a bar that hits both.
+  if (
+    config.earlyStopPct > 0 &&
+    s.scaled === 0 &&
+    s.stopLabel !== "BE" &&
+    s.entry != null &&
+    s.ladderAhead.length > 0
+  ) {
+    const t1 = s.ladderAhead[0];
+    const distance = Math.abs(t1.price - s.entry);
+    const trigger = (config.earlyStopPct / 100) * distance;
+    const improves = s.stop == null || (isLong ? s.entry > s.stop : s.entry < s.stop);
+    if (distance > 0 && (s.mfe ?? 0) >= trigger && improves) {
+      s = {
+        ...s,
+        stop: s.entry,
+        stopLabel: "BE",
+        events: [
+          ...s.events,
+          {
+            kind: "stop_moved",
+            time: bar.time,
+            price: s.entry,
+            label: "BE",
+            note: `Early BE: +${(s.mfe ?? 0).toFixed(2)} pts (${config.earlyStopPct}% to ${t1.label}) · stop → BE ${s.entry.toFixed(2)}`,
+          },
+        ],
+      };
+    }
+  }
+
   // --------- Profit-direction acceptance sweep ---------
   const ahead = s.ladderAhead.slice();
   const scaleVerb = isLong ? "sold" : "covered";
