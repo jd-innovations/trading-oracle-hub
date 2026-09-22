@@ -41,6 +41,7 @@ function tradePnlUsd(e: JournalEntry): number {
 
 function JournalPage() {
   const [inst, setInst] = useState<Instrument>("All");
+  const [sel, setSel] = useState<TradeDetailTarget | null>(null);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [authed, setAuthed] = useState<boolean | null>(null);
