@@ -86,6 +86,38 @@ export interface TradeState {
 
 const CONTRACTS = 3;
 
+/** User-tunable auto-trader rules. */
+export interface AutoTraderConfig {
+  /** ET clock time ("HH:MM") before which no new entries are taken. "09:30" = off. */
+  coolOffEt: string;
+  /** Move the stop to break-even once price runs this % of the way to Target 1. 0 = off. */
+  earlyStopPct: number;
+}
+
+export const DEFAULT_CONFIG: AutoTraderConfig = { coolOffEt: "09:35", earlyStopPct: 50 };
+
+export const COOL_OFF_OPTIONS = ["09:30", "09:35", "09:40", "09:45"] as const;
+export const EARLY_STOP_OPTIONS = [0, 33, 50, 75] as const;
+
+/** Minutes since ET midnight for an "HH:MM" string. */
+function etMinutesFromLabel(label: string): number {
+  const [h, m] = label.split(":").map((n) => parseInt(n, 10));
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return 9 * 60 + 30;
+  return h * 60 + m;
+}
+
+/** Minutes since ET midnight for a bar timestamp. */
+export function etMinutesOfBar(t: number): number {
+  const d = new Date(t * 1000);
+  const h = (d.getUTCHours() - ET_OFFSET_HOURS + 24) % 24;
+  return h * 60 + d.getUTCMinutes();
+}
+
+/** True while the opening cool-off window is still in effect for this bar. */
+export function inCoolOff(t: number, config: AutoTraderConfig): boolean {
+  return etMinutesOfBar(t) < etMinutesFromLabel(config.coolOffEt);
+}
+
 export function initialState(plan: DailyPlanRow, symbol: "ES" | "NQ"): TradeState {
   const mode: Mode = plan.bias === "Neutral" ? "neutral" : "directional";
   const side: Side | undefined =
