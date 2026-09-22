@@ -210,7 +210,15 @@ export function useAutoTrader(
       setState(next);
       persist(next);
     }
-  }, [bars, plan, enabled, symbol]);
+  }, [bars, plan, enabled, symbol, config.coolOffEt, config.earlyStopPct]);
+
+  // True while the opening cool-off window still blocks new entries.
+  const coolOffActive = useMemo(() => {
+    if (!state || state.phase !== "armed") return false;
+    const last = bars.length ? bars[bars.length - 1].time : Math.floor(Date.now() / 1000);
+    if (!isRthBar(last)) return false;
+    return inCoolOff(last, config);
+  }, [state, bars, config]);
 
   // Live diagnostic: closest approach per pool level today.
   const diag = useMemo<AutoTraderDiag | null>(() => {
