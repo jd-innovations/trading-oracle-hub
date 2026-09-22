@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      auto_trader_settings: {
+        Row: {
+          cool_off_et: string
+          created_at: string
+          early_stop_pct: number
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cool_off_et?: string
+          created_at?: string
+          early_stop_pct?: number
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cool_off_et?: string
+          created_at?: string
+          early_stop_pct?: number
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       auto_trader_state: {
         Row: {
           logged_leg_count: number
