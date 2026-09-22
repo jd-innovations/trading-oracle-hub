@@ -410,7 +410,13 @@ function PerfPage() {
                 return (
                   <div
                     key={`${t.plan_date}-${t.symbol}-${i}`}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-surface-1 px-3 py-2"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSel(perfToTarget(t))}
+                    onKeyDown={(ev) => {
+                      if (ev.key === "Enter" || ev.key === " ") setSel(perfToTarget(t));
+                    }}
+                    className="flex cursor-pointer flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-surface-1 px-3 py-2 hover:border-info/40 hover:bg-surface-2"
                   >
                     <div className="mono flex items-center gap-2 text-xs">
                       <span className="font-bold">{fmtDate(t.plan_date)}</span>
