@@ -134,6 +134,7 @@ function computeExcursions(trades: PerfTrade[]): Excursions {
 
 function PerfPage() {
   const [windowKey, setWindowKey] = useState<WindowKey>("All");
+  const [sel, setSel] = useState<TradeDetailTarget | null>(null);
   const [inst, setInst] = useState<Instrument>("All");
   const [authed, setAuthed] = useState<boolean | null>(null);
   const [trades, setTrades] = useState<PerfTrade[]>([]);
