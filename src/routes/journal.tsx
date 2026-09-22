@@ -299,11 +299,17 @@ function JournalRow({ e }: { e: JournalEntry }) {
   );
 }
 
-function JournalCard({ e }: { e: JournalEntry }) {
+function JournalCard({ e, onSelect }: { e: JournalEntry; onSelect?: (e: JournalEntry) => void }) {
   if (e.kind === "trade") {
     const pnl = tradePnlUsd(e);
     return (
-      <div className="rounded-lg border border-border bg-card p-3">
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => onSelect?.(e)}
+        onKeyDown={(ev) => { if (ev.key === "Enter" || ev.key === " ") onSelect?.(e); }}
+        className="cursor-pointer rounded-lg border border-border bg-card p-3 active:bg-surface-1"
+      >
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
             <span className="mono text-xs text-muted-foreground">{fmtDate(e.plan_date)}</span>
