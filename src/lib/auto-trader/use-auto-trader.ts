@@ -300,5 +300,5 @@ export function useAutoTrader(
     };
   }, [plan, state, bars, symbol]);
 
-  return { state, enabled, setEnabled, reset, disabledReason, diag };
+  return { state, enabled, setEnabled, reset, disabledReason, diag, coolOffActive };
 }
