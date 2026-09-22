@@ -160,7 +160,7 @@ function JournalPage() {
       {/* Mobile: card list */}
       <div className="mt-3 space-y-2 md:hidden">
         {rows.map((r) => (
-          <JournalCard key={r.id} e={r} />
+          <JournalCard key={r.id} e={r} onSelect={(x) => setSel(toTarget(x))} />
         ))}
         {rows.length === 0 && (
           <div className="rounded-lg border border-border bg-card px-3 py-8 text-center text-sm text-muted-foreground">
