@@ -183,7 +183,7 @@ export function useAutoTrader(
         );
       }
 
-      next = advance(next, plan, bar);
+      next = advance(next, plan, bar, config);
     }
     if (next !== cur) {
       changed = true;
