@@ -241,11 +241,11 @@ function Excursion({ e, className = "" }: { e: JournalEntry; className?: string 
   );
 }
 
-function JournalRow({ e }: { e: JournalEntry }) {
+function JournalRow({ e, onSelect }: { e: JournalEntry; onSelect?: (e: JournalEntry) => void }) {
   if (e.kind === "trade") {
     const pnl = tradePnlUsd(e);
     return (
-      <tr className="hover:bg-surface-1/60">
+      <tr className="cursor-pointer hover:bg-surface-1/60" onClick={() => onSelect?.(e)}>
         <td className="mono whitespace-nowrap px-3 py-2 text-xs">{fmtDate(e.plan_date)}</td>
         <td className="px-3 py-2"><SymbolChip s={e.symbol} /></td>
         <td className="px-3 py-2 text-xs">
