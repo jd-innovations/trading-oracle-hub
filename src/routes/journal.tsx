@@ -187,7 +187,7 @@ function JournalPage() {
             </thead>
             <tbody className="divide-y divide-border">
               {rows.map((r) => (
-                <JournalRow key={r.id} e={r} />
+                <JournalRow key={r.id} e={r} onSelect={(x) => setSel(toTarget(x))} />
               ))}
               {rows.length === 0 && (
                 <tr>
