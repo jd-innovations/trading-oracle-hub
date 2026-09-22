@@ -108,6 +108,7 @@ export function useAutoTrader(
   plan: DailyPlanRow | null,
   bars: Candle[],
   symbol: SymbolId,
+  config: AutoTraderConfig = DEFAULT_CONFIG,
 ): UseAutoTraderResult {
   const [enabled, setEnabledState] = useState<boolean>(() => loadEnabled());
   const [state, setState] = useState<TradeState | null>(null);
