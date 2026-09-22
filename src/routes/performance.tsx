@@ -64,6 +64,26 @@ function tradeUsd(t: PerfTrade): number {
   return Number(t.realized_points ?? 0) * pointValueFor(t.symbol);
 }
 
+function perfToTarget(t: PerfTrade): TradeDetailTarget {
+  return {
+    symbol: t.symbol,
+    planDate: t.plan_date,
+    side: t.side,
+    entryLabel: t.entry_label,
+    entryPrice: t.entry_price != null ? Number(t.entry_price) : null,
+    exitLabel: t.exit_label,
+    exitPrice: t.exit_price != null ? Number(t.exit_price) : null,
+    entryTime: null,
+    exitTime: t.exit_time,
+    phase: t.phase,
+    realizedPoints: t.realized_points != null ? Number(t.realized_points) : null,
+    contracts: t.contracts,
+    mfe: t.mfe_points != null ? Number(t.mfe_points) : null,
+    mae: t.mae_points != null ? Number(t.mae_points) : null,
+    mfeTime: t.mfe_time,
+  };
+}
+
 function computeStats(trades: PerfTrade[]): Stats {
   const n = trades.length;
   const wins = trades.filter((t) => t.phase === "closed_win");
