@@ -193,7 +193,12 @@ function pickShortEntry(pool: Level[], bar: Bar): Level | null {
 }
 
 /** Advance the state by a single bar. Returns the updated state (no mutation). */
-export function advance(state: TradeState, plan: DailyPlanRow, bar: Bar): TradeState {
+export function advance(
+  state: TradeState,
+  plan: DailyPlanRow,
+  bar: Bar,
+  config: AutoTraderConfig = DEFAULT_CONFIG,
+): TradeState {
   // Terminal phases block only in directional mode. Neutral re-arms.
   if (state.phase === "disabled") return state;
   if (state.mode === "directional" && (state.phase === "stopped" || state.phase === "closed_win")) return state;
@@ -205,6 +210,9 @@ export function advance(state: TradeState, plan: DailyPlanRow, bar: Bar): TradeS
   let s: TradeState = { ...state, lastBarTime: bar.time, events: state.events };
 
   // --------- Entry ---------
+  // Opening cool-off: track price but take no new entries before the cutoff.
+  if (s.phase === "armed" && inCoolOff(bar.time, config)) return s;
+
   if (s.phase === "armed") {
     let entryLevel: Level | null = null;
     let chosenSide: Side | null = null;
