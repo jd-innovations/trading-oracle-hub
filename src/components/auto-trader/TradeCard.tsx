@@ -51,7 +51,25 @@ export function TradeCard({
   symbol: SymbolId;
   livePrice?: number;
 }) {
-  const { state, enabled, setEnabled, reset, disabledReason, diag } = useAutoTrader(plan, bars, symbol);
+  const qc = useQueryClient();
+  const fetchSettings = useServerFn(getAutoTraderSettings);
+  const persistSettings = useServerFn(saveAutoTraderSettings);
+  const settingsQuery = useQuery({
+    queryKey: ["auto-trader-settings"],
+    queryFn: () => fetchSettings(),
+    staleTime: 60_000,
+  });
+  const config: AutoTraderConfig = settingsQuery.data ?? DEFAULT_CONFIG;
+  const saveSettings = useMutation({
+    mutationFn: (next: AutoTraderConfig) => persistSettings({ data: next }),
+    onSuccess: (next) => {
+      qc.setQueryData(["auto-trader-settings"], next);
+      toast.success("Auto-trader rules saved.");
+    },
+    onError: () => toast.error("Couldn't save those rules — try again."),
+  });
+
+  const { state, enabled, setEnabled, reset, disabledReason, diag, coolOffActive } = useAutoTrader(plan, bars, symbol, config);
   const [copied, setCopied] = useState(false);
   const [autoPost, setAutoPost] = useState<boolean>(() => loadAutoPostTrades());
   useEffect(() => { saveAutoPostTrades(autoPost); }, [autoPost]);
