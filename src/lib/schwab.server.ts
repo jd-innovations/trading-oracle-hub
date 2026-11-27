@@ -273,7 +273,7 @@ export async function getSchwabTokenInfo(
 
 // ---------- REST helpers ----------
 
-async function schwabGet(
+export async function schwabGet(
   token: string,
   path: string,
   params: Record<string, string> = {},
@@ -330,78 +330,6 @@ export async function fetchSchwabPriceHistory(opts: {
     low: c.low,
     close: c.close,
   }));
-}
-
-// Map Schwab's grouped chain to the same shape as Tradier's options array,
-// so the existing computeGex() can be reused unchanged.
-export interface UnifiedOption {
-  symbol: string;
-  strike: number;
-  option_type: "call" | "put";
-  open_interest?: number;
-  greeks?: { gamma?: number; delta?: number } | null;
-  expiration_date?: string;
-}
-
-interface SchwabContract {
-  symbol: string;
-  strikePrice: number;
-  openInterest?: number;
-  gamma?: number;
-  delta?: number;
-  expirationDate?: string;
-}
-
-type SchwabExpMap = Record<string, Record<string, SchwabContract[]>>;
-
-interface SchwabChainResponse {
-  underlyingPrice?: number;
-  callExpDateMap?: SchwabExpMap;
-  putExpDateMap?: SchwabExpMap;
-}
-
-export async function fetchSchwabChain(opts: {
-  token: string;
-  symbol: string;
-  fromDate?: string; // YYYY-MM-DD
-  toDate?: string; // YYYY-MM-DD
-  contractType?: "ALL" | "CALL" | "PUT";
-}): Promise<{ spot: number | null; options: UnifiedOption[] }> {
-  const params: Record<string, string> = {
-    symbol: opts.symbol,
-    contractType: opts.contractType ?? "ALL",
-    includeUnderlyingQuote: "true",
-    strategy: "SINGLE",
-  };
-  if (opts.fromDate) params.fromDate = opts.fromDate;
-  if (opts.toDate) params.toDate = opts.toDate;
-  const json = (await schwabGet(
-    opts.token,
-    "/marketdata/v1/chains",
-    params,
-  )) as SchwabChainResponse | null;
-  if (!json) return { spot: null, options: [] };
-  const options: UnifiedOption[] = [];
-  const flatten = (map: SchwabExpMap | undefined, type: "call" | "put") => {
-    if (!map) return;
-    for (const exp of Object.keys(map)) {
-      for (const strike of Object.keys(map[exp])) {
-        for (const c of map[exp][strike]) {
-          options.push({
-            symbol: c.symbol,
-            strike: c.strikePrice,
-            option_type: type,
-            open_interest: c.openInterest,
-            greeks: { gamma: c.gamma, delta: c.delta },
-            expiration_date: c.expirationDate ?? exp.split(":")[0],
-          });
-        }
-      }
-    }
-  };
-  flatten(json.callExpDateMap, "call");
-  flatten(json.putExpDateMap, "put");
-  return { spot: json.underlyingPrice ?? null, options };
 }
 
 // ---------- Streamer session ----------

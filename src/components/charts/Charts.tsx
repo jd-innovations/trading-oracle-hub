@@ -13,7 +13,8 @@ export interface PriceLine {
   price: number;
   color: string;
   label: string;
-  style?: "solid" | "dashed";
+  style?: "solid" | "dashed" | "dotted";
+  width?: 1 | 2 | 3;
 }
 
 function useThemeKey() {
@@ -27,30 +28,71 @@ function useThemeKey() {
   return key;
 }
 
-export const EsCandleChart = forwardRef<ChartHandle, {
-  data: Array<{ time: number; open: number; high: number; low: number; close: number }>;
-  lines?: PriceLine[];
-  zones?: OpeningRangeZone[];
-  profileLevels?: ProfileLevel[];
-  height?: number;
-}>(function EsCandleChart(
-  { data, lines = [], zones = [], profileLevels = [], height = 320 },
-  ref,
-) {
+export const EsCandleChart = forwardRef<
+  ChartHandle,
+  {
+    data: Array<{ time: number; open: number; high: number; low: number; close: number }>;
+    lines?: PriceLine[];
+    zones?: OpeningRangeZone[];
+    profileLevels?: ProfileLevel[];
+    height?: number;
+  }
+>(function EsCandleChart({ data, lines = [], zones = [], profileLevels = [], height = 320 }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<any>(null);
+  const seriesRef = useRef<any>(null);
+  const priceLinesRef = useRef<any[]>([]);
   const primitiveRef = useRef<OpeningRangePrimitive | null>(null);
   const profileRef = useRef<ProfileLevelsPrimitive | null>(null);
   const zonesRef = useRef<OpeningRangeZone[]>(zones);
   const levelsRef = useRef<ProfileLevel[]>(profileLevels);
+  const dataRef = useRef(data);
+  const linesRef = useRef(lines);
+  const firstBarRef = useRef<number | null>(null);
   const themeKey = useThemeKey();
 
-  useImperativeHandle(ref, () => ({
-    fitContent: () => {
-      chartRef.current?.timeScale().fitContent();
-    },
-  }), []);
+  useImperativeHandle(
+    ref,
+    () => ({
+      fitContent: () => {
+        chartRef.current?.timeScale().fitContent();
+      },
+    }),
+    [],
+  );
 
+  // Draw price lines on the existing series (no chart rebuild, so zoom/pan survive).
+  const applyLines = (series: any, next: PriceLine[]) => {
+    for (const pl of priceLinesRef.current) {
+      try {
+        series.removePriceLine(pl);
+      } catch {
+        /* line already gone */
+      }
+    }
+    priceLinesRef.current = next.map((l) =>
+      series.createPriceLine({
+        price: l.price,
+        color: toRgb(l.color, l.color),
+        lineWidth: l.width ?? 1,
+        lineStyle: l.style === "dashed" ? 2 : l.style === "dotted" ? 1 : 0,
+        axisLabelVisible: true,
+        title: l.label,
+      }),
+    );
+  };
+
+  // Set candles; refit only when the series changes identity (symbol/timeframe switch).
+  const applyData = (series: any, next: typeof data) => {
+    series.setData(next as any);
+    const first = next.length ? next[0].time : null;
+    if (first !== firstBarRef.current) {
+      firstBarRef.current = first;
+      chartRef.current?.timeScale().fitContent();
+    }
+  };
+
+  // Create the chart once per theme. Data, lines and height update in place below.
   useEffect(() => {
     let disposed = false;
     let chart: any;
@@ -81,12 +123,11 @@ export const EsCandleChart = forwardRef<ChartHandle, {
         minute: "2-digit",
       });
       const fmtET = (time: number) => etTimeFmt.format(new Date(time * 1000));
-      const fmtETDateTime = (time: number) =>
-        etDateTimeFmt.format(new Date(time * 1000)) + " ET";
+      const fmtETDateTime = (time: number) => etDateTimeFmt.format(new Date(time * 1000)) + " ET";
 
       chart = lib.createChart(containerRef.current, {
         width: containerRef.current.clientWidth,
-        height,
+        height: containerRef.current.clientHeight || height,
         localization: {
           locale: "en-US",
           timeFormatter: fmtETDateTime,
@@ -108,7 +149,7 @@ export const EsCandleChart = forwardRef<ChartHandle, {
           secondsVisible: false,
           rightOffset: 4,
           barSpacing: 8,
-          minBarSpacing: 6,
+          minBarSpacing: 2,
           tickMarkFormatter: (time: number) => fmtET(time),
         },
         crosshair: { mode: 1 },
@@ -123,18 +164,11 @@ export const EsCandleChart = forwardRef<ChartHandle, {
         wickUpColor: bull,
         wickDownColor: bear,
       });
-      series.setData(data as any);
-
-      for (const l of lines) {
-        series.createPriceLine({
-          price: l.price,
-          color: toRgb(l.color, l.color),
-          lineWidth: 1,
-          lineStyle: l.style === "dashed" ? 2 : 0,
-          axisLabelVisible: true,
-          title: l.label,
-        });
-      }
+      seriesRef.current = series;
+      priceLinesRef.current = [];
+      firstBarRef.current = null;
+      applyData(series, dataRef.current);
+      applyLines(series, linesRef.current);
 
       const primitive = new OpeningRangePrimitive();
       series.attachPrimitive(primitive);
@@ -145,8 +179,6 @@ export const EsCandleChart = forwardRef<ChartHandle, {
       series.attachPrimitive(profile);
       profile.setLevels(levelsRef.current);
       profileRef.current = profile;
-
-      chart.timeScale().fitContent();
 
       resizeObserver = new ResizeObserver((entries) => {
         for (const e of entries) chart.applyOptions({ width: e.contentRect.width });
@@ -159,10 +191,29 @@ export const EsCandleChart = forwardRef<ChartHandle, {
       resizeObserver?.disconnect();
       primitiveRef.current = null;
       profileRef.current = null;
+      seriesRef.current = null;
+      priceLinesRef.current = [];
       chartRef.current = null;
       chart?.remove();
     };
-  }, [data, lines, height, themeKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [themeKey]);
+
+  useEffect(() => {
+    dataRef.current = data;
+    if (seriesRef.current) applyData(seriesRef.current, data);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
+
+  useEffect(() => {
+    linesRef.current = lines;
+    if (seriesRef.current) applyLines(seriesRef.current, lines);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lines]);
+
+  useEffect(() => {
+    chartRef.current?.applyOptions({ height });
+  }, [height]);
 
   // Push zones into the primitive without recreating the chart.
   useEffect(() => {

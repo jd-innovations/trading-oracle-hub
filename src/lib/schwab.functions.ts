@@ -2,7 +2,6 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Candle } from "./chart-utils";
-import type { GexLevel } from "./gex.server";
 
 // ---------- Status / disconnect / OAuth URL ----------
 
@@ -256,60 +255,6 @@ export const getSchwabHistory = createServerFn({ method: "POST" })
     }
   });
 
-
-// ---------- SPX GEX via Schwab ----------
-
-
-export const getSchwabSpxGex = createServerFn({ method: "POST" })
-  .inputValidator(z.object({ expirations: z.number().int().min(1).max(3) }))
-  .handler(
-    async ({
-      data,
-    }): Promise<{
-      levels: GexLevel[];
-      asOf: number;
-      spot: number | null;
-      error?: string;
-    }> => {
-      const now = Math.floor(Date.now() / 1000);
-      const { getSchwabAccessToken, getSchwabOwnerUserId, fetchSchwabChain, SchwabReauthRequired } =
-        await import("./schwab.server");
-      const { computeGex } = await import("./gex.server");
-      try {
-        const ownerId = await getSchwabOwnerUserId();
-        const token = await getSchwabAccessToken(ownerId);
-        // Pick next N expirations: ask Schwab for a 30-day window and pick
-        // the first `expirations` unique dates.
-        const today = new Date();
-        const fromDate = today.toISOString().slice(0, 10);
-        const to = new Date(today.getTime() + 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
-        const { spot, options } = await fetchSchwabChain({
-          token,
-          symbol: "$SPX",
-          fromDate,
-          toDate: to,
-        });
-        if (!options.length || spot == null) {
-          return { levels: [], asOf: now, spot, error: "empty" };
-        }
-        // Filter to nearest N expirations
-        const expDates = [...new Set(options.map((o) => o.expiration_date ?? ""))]
-          .filter(Boolean)
-          .sort();
-        const keep = new Set(expDates.slice(0, data.expirations));
-        const filtered = options.filter((o) => o.expiration_date && keep.has(o.expiration_date));
-        const levels = computeGex(filtered, spot);
-        if (!levels.length) return { levels: [], asOf: now, spot, error: "no_greeks" };
-        return { levels, asOf: now, spot };
-      } catch (e) {
-        if (e instanceof SchwabReauthRequired) {
-          return { levels: [], asOf: now, spot: null, error: "reauth_required" };
-        }
-        console.error("[schwab] gex failed", e);
-        return { levels: [], asOf: now, spot: null, error: "fetch_failed" };
-      }
-    },
-  );
 
 // ---------- SPX Streamer session ----------
 

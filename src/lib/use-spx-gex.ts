@@ -1,51 +1,48 @@
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { getSpxGex, type GexResult } from "./gex.functions";
-import { getSchwabSpxGex } from "./schwab.functions";
-
+import { getGex, type GexResult } from "./gex.functions";
+import type { ExpirySet } from "./gex-engine";
 
 const REFRESH_MS = 60_000;
 
-export type GexSource = "schwab" | "tradier" | "mock";
+export type { GexResult };
 
 /**
- * Poll SPX dealer-gamma levels. Tries Schwab when signed in, falls back
- * to Tradier, then to empty (chart shows mock).
+ * Poll GEX levels for an underlying every minute while enabled.
+ * Keeps the last good result on a failed refresh (its asOf shows how old it is);
+ * never substitutes mock levels.
  */
-export function useSpxGex(enabled: boolean) {
-  const fetchTradier = useServerFn(getSpxGex);
-  const fetchSchwab = useServerFn(getSchwabSpxGex);
-  const [state, setState] = useState<GexResult>({
-    levels: [],
-    asOf: 0,
-    spot: null,
-  });
-  const [source, setSource] = useState<GexSource>("mock");
+export function useGex(underlying: "SPX" | "QQQ", expirySet: ExpirySet, enabled: boolean) {
+  const fetchGex = useServerFn(getGex);
+  const [result, setResult] = useState<GexResult | null>(null);
+  const [lastError, setLastError] = useState<GexResult["error"] | "request_failed" | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setResult(null);
+    setLastError(null);
+  }, [underlying, expirySet]);
 
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
     const tick = async () => {
-      // Schwab is the primary GEX source (uses stored connection — no sign-in required).
+      setLoading(true);
       try {
-        const r = await fetchSchwab({ data: { expirations: 1 } });
-        if (!cancelled && r.levels.length) {
-          setState(r);
-          setSource("schwab");
-          return;
+        const r = await fetchGex({ data: { underlying, expirySet } });
+        if (cancelled) return;
+        if (r.levels.length) {
+          setResult(r);
+          setLastError(null);
+        } else {
+          setLastError(r.error ?? "empty");
+          // keep the previous good result, if any, so the user sees it go stale rather than vanish
+          setResult((prev) => prev ?? r);
         }
       } catch {
-        /* fall through to Tradier */
-      }
-
-      try {
-        const r = await fetchTradier({ data: { expirations: 1 } });
-        if (!cancelled) {
-          setState(r);
-          setSource(r.levels.length ? "tradier" : "mock");
-        }
-      } catch {
-        /* keep last */
+        if (!cancelled) setLastError("request_failed");
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     };
     tick();
@@ -54,13 +51,7 @@ export function useSpxGex(enabled: boolean) {
       cancelled = true;
       clearInterval(id);
     };
-  }, [enabled, fetchSchwab, fetchTradier]);
+  }, [enabled, underlying, expirySet, fetchGex]);
 
-  return {
-    levels: state.levels,
-    asOf: state.asOf,
-    spot: state.spot,
-    isLive: state.levels.length > 0,
-    source,
-  };
+  return { result, lastError, loading };
 }
