@@ -47,6 +47,8 @@ export interface GexQuality {
   contractsTotal: number;
   /** Share of open interest dropped by the quality rules (0..1). */
   droppedOiShare: number;
+  /** Dropped open interest by reason, as shares of total OI (0..1). */
+  dropReasons: { expired: number; crossed: number; invalidIv: number };
 }
 
 export interface GexComputation {
@@ -118,7 +120,11 @@ export function selectExpirations(
   monthlyDates?: Set<string>,
 ): string[] {
   const today = todayET(now);
-  const future = [...new Set(all)].filter((d) => d >= today).sort();
+  // An expiration counts as "live" until its last possible settlement time (4:00 PM ET).
+  // After the close, today's contracts are gone and 0DTE rolls to the next expiration.
+  const future = [...new Set(all)]
+    .filter((d) => d >= today && expirationTimestamp(d, "PM") > now)
+    .sort();
   if (!future.length) return [];
   if (set === "0dte") {
     // Contracts expiring today; if none today (holiday/weekend), the nearest expiration.
@@ -165,6 +171,7 @@ export function computeGexLevels(
   // ---- quality rules
   let totalOi = 0;
   let droppedOi = 0;
+  const drop = { expired: 0, crossed: 0, invalidIv: 0 };
   const prepared: Prepared[] = [];
   for (const o of raw) {
     const oi = o.openInterest ?? 0;
@@ -172,13 +179,20 @@ export function computeGexLevels(
     totalOi += oi;
     const T = (expirationTimestamp(o.expiration, o.settlement ?? "PM") - now) / YEAR_MS;
     const crossed = o.bid != null && o.ask != null && o.ask > 0 && o.bid > o.ask;
-    if (crossed || T <= 0) {
+    if (T <= 0) {
       droppedOi += oi;
+      drop.expired += oi;
+      continue;
+    }
+    if (crossed) {
+      droppedOi += oi;
+      drop.crossed += oi;
       continue;
     }
     const sigma = o.iv ?? NaN;
     if (!(sigma >= 0.01 && sigma <= 3)) {
       droppedOi += oi; // invalid IV: dropped, never guessed
+      drop.invalidIv += oi;
       continue;
     }
     prepared.push({
@@ -196,6 +210,11 @@ export function computeGexLevels(
     contractsUsed: prepared.length,
     contractsTotal: raw.length,
     droppedOiShare: droppedShare,
+    dropReasons: {
+      expired: totalOi ? drop.expired / totalOi : 0,
+      crossed: totalOi ? drop.crossed / totalOi : 0,
+      invalidIv: totalOi ? drop.invalidIv / totalOi : 0,
+    },
   };
   if (quality.status === "unusable") {
     return {
@@ -287,28 +306,24 @@ export function computeGexLevels(
       kind: "putWall",
       gex: puts[0].put,
     });
-  calls
-    .slice(1, 3)
-    .forEach((s, i) =>
-      levels.push({
-        label: `C${i + 2}`,
-        price: s.K,
-        weight: s.call / maxAbs,
-        kind: "call",
-        gex: s.call,
-      }),
-    );
-  puts
-    .slice(1, 3)
-    .forEach((s, i) =>
-      levels.push({
-        label: `P${i + 2}`,
-        price: s.K,
-        weight: -s.put / maxAbs,
-        kind: "put",
-        gex: s.put,
-      }),
-    );
+  calls.slice(1, 3).forEach((s, i) =>
+    levels.push({
+      label: `C${i + 2}`,
+      price: s.K,
+      weight: s.call / maxAbs,
+      kind: "call",
+      gex: s.call,
+    }),
+  );
+  puts.slice(1, 3).forEach((s, i) =>
+    levels.push({
+      label: `P${i + 2}`,
+      price: s.K,
+      weight: -s.put / maxAbs,
+      kind: "put",
+      gex: s.put,
+    }),
+  );
 
   return {
     levels,

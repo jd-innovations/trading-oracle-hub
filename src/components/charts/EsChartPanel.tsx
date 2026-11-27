@@ -9,7 +9,7 @@ import { useOpeningRanges } from "@/lib/use-opening-ranges";
 import { computeZones } from "@/lib/opening-ranges";
 import { computeProfileLevels } from "@/lib/profile-levels";
 import { useSpxFeed } from "@/lib/use-spx-feed";
-import { useGex } from "@/lib/use-spx-gex";
+import { useGex, type GexResult } from "@/lib/use-spx-gex";
 import type { ExpirySet, GexLevel } from "@/lib/gex-engine";
 import { useEsFeed } from "@/lib/use-es-feed";
 
@@ -293,6 +293,16 @@ export function EsChartPanel({ initialSymbol = "ES" }: EsChartPanelProps = {}) {
   );
 }
 
+function dropDetail(q: NonNullable<GexResult["quality"]>): string {
+  const r = q.dropReasons;
+  const parts = [
+    r.invalidIv > 0.01 ? `invalid IV ${Math.round(r.invalidIv * 100)}%` : "",
+    r.crossed > 0.01 ? `crossed quotes ${Math.round(r.crossed * 100)}%` : "",
+    r.expired > 0.01 ? `expired ${Math.round(r.expired * 100)}%` : "",
+  ].filter(Boolean);
+  return parts.length ? ` (${parts.join(", ")} of open interest)` : "";
+}
+
 function fmtAge(sec: number | null): string {
   if (sec == null) return "";
   if (sec < 60) return `${sec}s ago`;
@@ -392,7 +402,7 @@ function GexStatusBar({
             {!mappingOk && gex?.levels.length
               ? mappingLabel
               : error
-                ? (GEX_ERRORS[error] ?? error)
+                ? `${GEX_ERRORS[error] ?? error}${error === "quality" && gex?.quality ? dropDetail(gex.quality) : ""}`
                 : "loading…"}
           </span>
         )}
